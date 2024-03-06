@@ -102,8 +102,6 @@ class HierarchicalLSTMDecoder(VAEDecoder):
                     name=f"{self.name}/level_{level_idx}_lstm"
                 )
             )
-        # Build core decoder
-        self._core_decoder.build(input_shapes)
 
     def _decode(self, input_sequence, z, teacher_force_probability, training: bool = False, **kwargs):
 
