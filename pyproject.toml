@@ -1,0 +1,51 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+package-mode = true
+name = "resolv-ml"
+version = "0.0.0.dev1"
+description = "A package for Resolv containing utilities for ML (Machine Learning)."
+license = "Apache-2.0"
+authors = [
+    "Matteo Pettenò <matteo.petteno1@gmail.com>"
+]
+maintainers = [
+    "Matteo Pettenò <matteo.petteno1@gmail.com>"
+]
+readme = ["README.md", "src/README.md", "docs/README.md"]
+homepage = "https://github.com/resolv-libs/resolv-ml"
+documentation = "https://github.com/resolv-libs/resolv-ml/docs"
+repository = "https://github.com/resolv-libs/resolv-ml"
+keywords = [
+    "resolv", "rersolv-libs", "resolv-ml",
+    "machine-learning", "ml", "keras"
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent"
+]
+packages = [
+    { include = "resolv_ml", from = "src" },
+]
+include = ["CHANGELOG.md"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+keras = "^3.0"
+tensorflow = "^2.15.0"
+
+[tool.poetry.group.dev.dependencies]
+
+[tool.poetry.group.test.dependencies]
+
+[tool.poetry.group.docs.dependencies]
+
+[tool.poetry.extras]
+
+[tool.poetry.plugins]
+
+[tool.poetry.urls]
