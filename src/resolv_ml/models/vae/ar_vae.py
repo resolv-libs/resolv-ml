@@ -6,6 +6,8 @@ import keras
 import keras.ops as k_ops
 
 from .base import VAE, VAEEncoder, VAEDecoder, LatentCodeProcessingLayer
+from resolv_ml.utilities.math.distances import compute_pairwise_distance_matrix
+from resolv_ml.utilities.statistic.power_transforms import PowerTransform
 
 
 class AttributeRegularizationLayer(LatentCodeProcessingLayer):
@@ -14,10 +16,12 @@ class AttributeRegularizationLayer(LatentCodeProcessingLayer):
                  gamma: float = 1.0,
                  regularization_dimension: int = 0,
                  name: str = "vae/attr_reg",
+                 batch_normalization: keras.layers.BatchNormalization = None,
                  **kwargs):
         super(AttributeRegularizationLayer, self).__init__(name=name, **kwargs)
         self._gamma = gamma
         self._regularization_dimension = regularization_dimension
+        self._batch_normalization = batch_normalization
 
     @property
     @abstractmethod
@@ -25,7 +29,7 @@ class AttributeRegularizationLayer(LatentCodeProcessingLayer):
         pass
 
     @abstractmethod
-    def _compute_attribute_regularization_loss(self, latent_codes, attributes) -> float:
+    def _compute_attribute_regularization_loss(self, latent_codes, attributes, training: bool = False):
         pass
 
     @property
@@ -39,7 +43,7 @@ class AttributeRegularizationLayer(LatentCodeProcessingLayer):
     def _process_latent_code(self, latent_codes, model_inputs, training: bool = False, **kwargs):
         try:
             latent_dimension = latent_codes[:, self._regularization_dimension]
-            reg_loss = self._compute_attribute_regularization_loss(latent_dimension, kwargs["attributes"])
+            reg_loss = self._compute_attribute_regularization_loss(latent_dimension, kwargs["attributes"], training)
             self.add_loss(self._gamma * reg_loss)
             self.regularization_loss_tracker.update_state(reg_loss)
             return latent_codes
@@ -53,11 +57,13 @@ class DefaultAttributeRegularization(AttributeRegularizationLayer):
                  loss_fn: keras.Loss = keras.losses.mean_absolute_error,
                  gamma: float = 1.0,
                  regularization_dimension: int = 0,
+                 batch_normalization: keras.layers.BatchNormalization = None,
                  name: str = "vae/default_attr_reg",
                  **kwargs):
-        super(AttributeRegularizationLayer, self).__init__(
+        super(DefaultAttributeRegularization, self).__init__(
             gamma=gamma,
             regularization_dimension=regularization_dimension,
+            batch_normalization=batch_normalization,
             name=name,
             **kwargs
         )
@@ -67,7 +73,9 @@ class DefaultAttributeRegularization(AttributeRegularizationLayer):
     def regularization_name(self):
         return "default_attr_reg_loss"
 
-    def _compute_attribute_regularization_loss(self, latent_codes, attributes):
+    def _compute_attribute_regularization_loss(self, latent_codes, attributes, training: bool = False):
+        if self._batch_normalization:
+            attributes = self._batch_normalization(attributes, training=training)
         return self._loss_fn(latent_codes, attributes)
 
 
@@ -80,9 +88,10 @@ class SignAttributeRegularization(AttributeRegularizationLayer):
                  scale_factor: float = 1.0,
                  name: str = "vae/sign_attr_reg",
                  **kwargs):
-        super(AttributeRegularizationLayer, self).__init__(
+        super(SignAttributeRegularization, self).__init__(
             gamma=gamma,
             regularization_dimension=regularization_dimension,
+            batch_normalization=None,
             name=name,
             **kwargs
         )
@@ -93,30 +102,42 @@ class SignAttributeRegularization(AttributeRegularizationLayer):
     def regularization_name(self):
         return "sign_attr_reg_loss"
 
-    def _compute_attribute_regularization_loss(self, latent_codes, attributes):
-
-        def compute_distance_matrix(tensors):
-            x_expanded = k_ops.expand_dims(tensors, 1)  # Expand dimensions to allow broadcasting
-            x_transposed = k_ops.transpose(x_expanded, axis=[0, 2, 1])
-            distance_matrix = x_expanded - x_transposed  # Compute pairwise differences
-            return distance_matrix
-
-        lc_dist_mat = compute_distance_matrix(latent_codes)
-        attribute_dist_mat = compute_distance_matrix(attributes)
+    def _compute_attribute_regularization_loss(self, latent_codes, attributes, training: bool = False):
+        lc_dist_mat = compute_pairwise_distance_matrix(latent_codes)
+        attribute_dist_mat = compute_pairwise_distance_matrix(attributes)
         lc_tanh = k_ops.tanh(lc_dist_mat * self._scale_factor)
         attribute_sign = k_ops.sign(attribute_dist_mat)
         sign_loss = self._loss_fn(lc_tanh, attribute_sign)
         return self._gamma * sign_loss
 
 
-class PowerTransformAttributeRegularization(AttributeRegularizationLayer):
+class PowerTransformAttributeRegularization(DefaultAttributeRegularization):
+
+    def __init__(self,
+                 power_transform: PowerTransform,
+                 loss_fn: keras.Loss = keras.losses.mean_absolute_error,
+                 gamma: float = 1.0,
+                 regularization_dimension: int = 0,
+                 batch_normalization: keras.layers.BatchNormalization = None,
+                 name: str = "vae/default_attr_reg",
+                 **kwargs):
+        super(PowerTransformAttributeRegularization, self).__init__(
+            loss_fn=loss_fn,
+            gamma=gamma,
+            regularization_dimension=regularization_dimension,
+            batch_normalization=batch_normalization,
+            name=name,
+            **kwargs
+        )
+        self._power_transform = power_transform
 
     @property
     def regularization_name(self):
         return "power_transform_attr_reg_loss"
 
-    def _compute_attribute_regularization_loss(self, latent_codes, attributes):
-        pass
+    def _compute_attribute_regularization_loss(self, latent_codes, attributes, training: bool = False):
+        attributes = self._power_transform(attributes, training=training)
+        return super()._compute_attribute_regularization_loss(latent_codes, attributes)
 
 
 class AttributeRegularizedVAE(keras.Model):

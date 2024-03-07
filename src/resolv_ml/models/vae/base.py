@@ -4,7 +4,7 @@ from typing import Any, Tuple
 
 import keras
 
-from resolv_ml.utilities import training as training_utils
+from resolv_ml.utilities.helpers import training as training_utils
 
 
 class VAEEncoder(ABC, keras.Layer):

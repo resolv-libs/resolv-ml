@@ -2,7 +2,7 @@
 from typing import List, Any, Tuple
 
 from ..base import VAEEncoder
-from resolv_ml.utilities import rnn as rnn_utils
+from resolv_ml.utilities.nn import rnn as rnn_utils
 
 
 class LSTMEncoder(VAEEncoder):

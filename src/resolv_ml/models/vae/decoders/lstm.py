@@ -5,7 +5,7 @@ import keras
 import keras.ops as k_ops
 
 from resolv_ml.models.vae.base import VAEDecoder
-from resolv_ml.utilities import rnn as rnn_utils
+from resolv_ml.utilities.nn import rnn as rnn_utils
 
 
 class LSTMDecoder(VAEDecoder):
