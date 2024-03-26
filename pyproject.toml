@@ -36,6 +36,9 @@ include = ["CHANGELOG.md"]
 [tool.poetry.dependencies]
 python = "^3.9"
 keras = "^3.0"
+jax = { version = "^0.4", optional = true }
+torch = { version = "^2.2", optional = true }
+tensorflow = { version = "^2.16", optional = true }
 
 [tool.poetry.group.dev.dependencies]
 
@@ -44,6 +47,9 @@ keras = "^3.0"
 [tool.poetry.group.docs.dependencies]
 
 [tool.poetry.extras]
+jax = ["jax"]
+pytorch = ["torch"]
+tensorflow = ["tensorflow"]
 
 [tool.poetry.plugins]
 
