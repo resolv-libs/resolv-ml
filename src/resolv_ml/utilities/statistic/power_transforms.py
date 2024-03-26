@@ -6,7 +6,7 @@ import keras
 import keras.ops as k_ops
 
 
-class PowerTransform(ABC, keras.Layer):
+class PowerTransform(keras.Layer, ABC):
 
     def __init__(self, lambda_init: float = 1.0, name: str = "power_transform", **kwargs):
         super(PowerTransform, self).__init__(name=name, **kwargs)
