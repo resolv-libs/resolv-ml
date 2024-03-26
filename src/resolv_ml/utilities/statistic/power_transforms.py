@@ -1,12 +1,12 @@
 # TODO - DOC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from typing import Tuple
 
 import keras
 import keras.ops as k_ops
 
 
-class PowerTransform(keras.Layer):
+class PowerTransform(ABC, keras.Layer):
 
     def __init__(self, lambda_init: float = 1.0, name: str = "power_transform", **kwargs):
         super(PowerTransform, self).__init__(name=name, **kwargs)
@@ -111,3 +111,16 @@ class YeoJohnson(PowerTransform):
         x_pos = k_ops.multiply(tensor, mask)
         x_neg = k_ops.multiply(tensor, k_ops.subtract(1, mask))
         return x_pos, x_neg
+
+
+if __name__ == '__main__':
+
+    # Test p-transform layer
+    box_cox_layer = BoxCox(lambda_init=1.0)
+    box_cox_layer.trainable = False
+    box_cox_model = keras.Sequential([box_cox_layer])
+
+    yeo_johnson_layer = YeoJohnson(lambda_init=1.0)
+    yeo_johnson_layer.trainable = False
+    yeo_johnson_model = keras.Sequential([yeo_johnson_layer])
+
