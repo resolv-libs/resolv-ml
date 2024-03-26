@@ -35,7 +35,7 @@ class PowerTransform(ABC, keras.Layer):
 class BoxCox(PowerTransform):
 
     def __init__(self, lambda_init: float = 1.0, name: str = "box_cox_power_transform", **kwargs):
-        super(PowerTransform, self).__init__(lambda_init=lambda_init, name=name, **kwargs)
+        super(BoxCox, self).__init__(lambda_init=lambda_init, name=name, **kwargs)
 
     def _transform(self, inputs):
         if k_ops.any(k_ops.less_equal(inputs, 0)):
@@ -65,7 +65,7 @@ class BoxCox(PowerTransform):
 class YeoJohnson(PowerTransform):
 
     def __init__(self, lambda_init: float = 1.0, name: str = "yeo_johnson_power_transform", **kwargs):
-        super(PowerTransform, self).__init__(lambda_init=lambda_init, name=name, **kwargs)
+        super(YeoJohnson, self).__init__(lambda_init=lambda_init, name=name, **kwargs)
 
     def _transform(self, inputs):
         x_pos, x_neg = self._get_positive_and_negative_inputs(inputs)
