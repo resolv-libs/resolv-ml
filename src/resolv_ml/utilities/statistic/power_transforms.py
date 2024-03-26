@@ -1,12 +1,12 @@
 # TODO - DOC
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Tuple
 
 import keras
 import keras.ops as k_ops
 
 
-class PowerTransform(keras.Layer, ABC):
+class PowerTransform(keras.Layer):
 
     def __init__(self, lambda_init: float = 1.0, name: str = "power_transform", **kwargs):
         super(PowerTransform, self).__init__(name=name, **kwargs)
