@@ -46,6 +46,11 @@ class PowerTransformTest(unittest.TestCase):
     def setUp(self):
         self.output_dir.mkdir(exist_ok=True)
 
+    def test_box_cox_transform_negative_values(self):
+        x = k_ops.convert_to_tensor([-1, 0, 10, 20])
+        with self.assertRaises(ValueError):
+            self.box_cox_layer(x)
+
     def test_box_cox_transform(self):
         x = self.input_distribution
         y = self.box_cox_layer(x)
