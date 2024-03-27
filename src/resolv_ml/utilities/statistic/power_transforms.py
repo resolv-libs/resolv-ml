@@ -38,8 +38,10 @@ class BoxCox(PowerTransform):
         super(BoxCox, self).__init__(lambda_init=lambda_init, name=name, **kwargs)
 
     def _transform(self, inputs):
-        if k_ops.any(k_ops.less_equal(inputs, 0)):
+        def error_fn():
             raise ValueError('The Box-Cox transformation can only be applied to strictly positive data.')
+
+        k_ops.cond(k_ops.any(k_ops.less_equal(inputs, 0)), true_fn=error_fn)
 
         if self.lmbda.value == 0:
             # WARNING: when Box-Cox returns log(x), the output ceases to depend on lambda. Therefore, the gradient
