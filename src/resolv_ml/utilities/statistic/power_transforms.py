@@ -39,29 +39,34 @@ class BoxCox(PowerTransform):
 
     def _transform(self, inputs):
         def error_fn():
+            # TODO - Support for graph execution
             raise ValueError('The Box-Cox transformation can only be applied to strictly positive data.')
 
-        k_ops.cond(k_ops.any(k_ops.less_equal(inputs, 0)), true_fn=error_fn, false_fn=lambda: ())
-
-        if self.lmbda.value == 0:
+        def zero_lambda_fn():
             # WARNING: when Box-Cox returns log(x), the output ceases to depend on lambda. Therefore, the gradient
             # w.r.t. lambda becomes identically zero. As such, lambda is not connected to the autograd graph anymore,
             # and cannot be optimized via (simple) gradient descent. However, it might still work with inertial
             # optimizers, i.e., those that have accumulated previous gradients, e.g., SGD with momentum, Adam, etc.
             return k_ops.log(inputs)
 
-        else:
+        def non_zero_lambda_fn():
             numerator = k_ops.subtract(k_ops.power(inputs, self.lmbda), 1)
             denominator = self.lmbda
             return k_ops.divide(numerator, denominator)
 
+        k_ops.cond(k_ops.any(k_ops.less_equal(inputs, 0)), true_fn=error_fn, false_fn=lambda: ())
+        return k_ops.cond(k_ops.equal(k_ops.abs(self.lmbda), 0), zero_lambda_fn, non_zero_lambda_fn)
+
     def _inverse_transform(self, inputs):
-        if self.lmbda.value == 0:
+        def zero_lambda_fn():
             return k_ops.exp(inputs)
-        else:
+
+        def non_zero_lambda_fn():
             power_base = k_ops.add(k_ops.multiply(inputs, self.lmbda), 1)
             power_exp = k_ops.divide(1, self.lmbda)
             return k_ops.power(power_base, power_exp)
+
+        return k_ops.cond(k_ops.equal(k_ops.abs(self.lmbda), 0), zero_lambda_fn, non_zero_lambda_fn)
 
 
 class YeoJohnson(PowerTransform):
@@ -70,41 +75,47 @@ class YeoJohnson(PowerTransform):
         super(YeoJohnson, self).__init__(lambda_init=lambda_init, name=name, **kwargs)
 
     def _transform(self, inputs):
-        x_pos, x_neg = self._get_positive_and_negative_inputs(inputs)
+        def zero_lambda_fn():
+            return k_ops.log1p(x_pos)
 
-        if self.lmbda.value == 0:
-            y_pos = k_ops.log1p(x_pos)
-        else:
+        def non_zero_lambda_fn():
             numerator = k_ops.subtract(k_ops.power(k_ops.add(x_pos, 1), self.lmbda), 1)
             denominator = self.lmbda
-            y_pos = k_ops.divide(numerator, denominator)
+            return k_ops.divide(numerator, denominator)
 
-        if self.lmbda.value == 2:
-            y_neg = -k_ops.log1p(-x_neg)
-        else:
+        def two_lambda_fn():
+            return -k_ops.log1p(-x_neg)
+
+        def non_two_lambda_fn():
             numerator = -(k_ops.power(k_ops.add(-x_neg, 1), k_ops.subtract(2, self.lmbda) - 1))
             denominator = k_ops.subtract(2, self.lmbda)
-            y_neg = k_ops.divide(numerator, denominator)
+            return k_ops.divide(numerator, denominator)
 
+        x_pos, x_neg = self._get_positive_and_negative_inputs(inputs)
+        y_pos = k_ops.cond(k_ops.equal(k_ops.abs(self.lmbda), 0), zero_lambda_fn, non_zero_lambda_fn)
+        y_neg = k_ops.cond(k_ops.equal(k_ops.abs(self.lmbda), 2), two_lambda_fn, non_two_lambda_fn)
         return y_pos + y_neg
 
     def _inverse_transform(self, inputs):
-        x_pos, x_neg = self._get_positive_and_negative_inputs(inputs)
+        def zero_lambda_fn():
+            return k_ops.subtract(k_ops.exp(x_pos), 1)
 
-        if self.lmbda.value == 0:
-            y_pos = k_ops.subtract(k_ops.exp(x_pos), 1)
-        else:
+        def non_zero_lambda_fn():
             power_base = k_ops.add(k_ops.multiply(self.lmbda, x_pos), 1)
             power_exp = k_ops.divide(1, self.lmbda)
-            y_pos = k_ops.subtract(k_ops.power(power_base, power_exp), 1)
+            return k_ops.subtract(k_ops.power(power_base, power_exp), 1)
 
-        if self.lmbda.value == 2:
-            y_neg = k_ops.subtract(1, k_ops.exp(-x_neg))
-        else:
+        def two_lambda_fn():
+            return k_ops.subtract(1, k_ops.exp(-x_neg))
+
+        def non_two_lambda_fn():
             power_base = k_ops.add(k_ops.multiply(-k_ops.subtract(2, self.lmbda), x_neg), 1)
             power_exp = k_ops.divide(1, k_ops.subtract(2, self.lmbda))
-            y_neg = k_ops.subtract(1, k_ops.power(power_base, power_exp))
+            return k_ops.subtract(1, k_ops.power(power_base, power_exp))
 
+        x_pos, x_neg = self._get_positive_and_negative_inputs(inputs)
+        y_pos = k_ops.cond(k_ops.equal(k_ops.abs(self.lmbda), 0), zero_lambda_fn, non_zero_lambda_fn)
+        y_neg = k_ops.cond(k_ops.equal(k_ops.abs(self.lmbda), 2), two_lambda_fn, non_two_lambda_fn)
         return y_pos + y_neg
 
     @staticmethod

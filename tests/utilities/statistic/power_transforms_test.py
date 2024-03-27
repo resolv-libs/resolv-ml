@@ -6,30 +6,12 @@ import keras.ops as k_ops
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
+import tensorflow as tf
+
 from resolv_ml.utilities.statistic.power_transforms import BoxCox, YeoJohnson
 
 
 class PowerTransformTest(unittest.TestCase):
-
-    @property
-    def box_cox_lambda(self) -> float:
-        return 0.33
-
-    @property
-    def box_cox_layer(self) -> BoxCox:
-        box_cox_layer = BoxCox(lambda_init=self.box_cox_lambda)
-        box_cox_layer.trainable = False
-        return box_cox_layer
-
-    @property
-    def yeo_johnson_lambda(self) -> YeoJohnson:
-        return -2.22
-
-    @property
-    def yeo_johnson_layer(self) -> BoxCox:
-        yeo_johnson_layer = YeoJohnson(lambda_init=self.yeo_johnson_lambda)
-        yeo_johnson_layer.trainable = False
-        return yeo_johnson_layer
 
     @property
     def input_distribution(self):
@@ -41,37 +23,10 @@ class PowerTransformTest(unittest.TestCase):
 
     @property
     def output_dir(self) -> Path:
-        return Path("./output")
+        return Path("./output/power-transforms")
 
     def setUp(self):
         self.output_dir.mkdir(exist_ok=True)
-
-    def test_box_cox_transform_negative_values(self):
-        x = keras.random.uniform(shape=(1000, 1), minval=-1, maxval=1)
-        with self.assertRaises(ValueError):
-            self.box_cox_layer(x)
-
-    def test_box_cox_transform(self):
-        x = self.input_distribution
-        y = self.box_cox_layer(x)
-        y_std = k_ops.divide(k_ops.subtract(y, k_ops.mean(y)), k_ops.std(y))
-        self._plot_distributions(x, y_std, self.box_cox_lambda, "box-cox-example")
-
-    def test_box_cox_inverse_transform(self):
-        x = self.inverse_input_distribution
-        y = self.box_cox_layer(x, inverse=True)
-        self._plot_distributions(x, y, self.box_cox_lambda, "box-cox-inverse-example")
-
-    def test_yeo_johnson_transform(self):
-        x = self.input_distribution
-        y = self.yeo_johnson_layer(x)
-        y_std = k_ops.divide(k_ops.subtract(y, k_ops.mean(y)), k_ops.std(y))
-        self._plot_distributions(x, y_std, self.yeo_johnson_lambda, "yeo-johnson-example")
-
-    def test_yeo_johnson_inverse_transform(self):
-        x = self.inverse_input_distribution
-        y = self.yeo_johnson_layer(x, inverse=True)
-        self._plot_distributions(x, y, self.yeo_johnson_lambda, "yeo-johnson-inverse-example")
 
     @mpl.rc_context(rc={'text.usetex': True, 'font.family': 'serif', 'font.size': 18,
                         'font.serif': 'Computer Modern Roman', 'lines.linewidth': 2})
@@ -87,6 +42,111 @@ class PowerTransformTest(unittest.TestCase):
         ax2.set_ylabel(r'Output distribution ($\lambda$ = ' + f'{lmbda:.2f})')
         plt.savefig(self.output_dir / f'{output_fig_name}.png', dpi=300)
         plt.close()
+
+
+class BoxCoxPowerTransformsTest(PowerTransformTest):
+
+    @staticmethod
+    def box_cox_layer(lmbda: float = 0.33) -> BoxCox:
+        box_cox_layer = BoxCox(lambda_init=lmbda)
+        box_cox_layer.trainable = False
+        return box_cox_layer
+
+    def test_box_cox(self):
+        x = self.input_distribution
+        y = self.box_cox_layer()(x)
+        y_std = k_ops.divide(k_ops.subtract(y, k_ops.mean(y)), k_ops.std(y))
+        self._plot_distributions(x, y_std, 0.33, "box-cox")
+
+    def test_box_cox_graph(self):
+        @tf.function
+        def graph_wrapper():
+            y = box_cox_layer(x)
+            return k_ops.divide(k_ops.subtract(y, k_ops.mean(y)), k_ops.std(y))
+
+        x = self.input_distribution
+        box_cox_layer = self.box_cox_layer()
+        y_std = graph_wrapper()
+        self._plot_distributions(x, y_std, 0.33, "box-cox-graph")
+
+    def test_box_cox_inverse(self):
+        x = self.inverse_input_distribution
+        y = self.box_cox_layer()(x, inverse=True)
+        self._plot_distributions(x, y, 0.33, "box-cox-inverse")
+
+    def test_box_cox_inverse_graph(self):
+        @tf.function
+        def graph_wrapper():
+            y = box_cox_layer(x, inverse=True)
+            return k_ops.divide(k_ops.subtract(y, k_ops.mean(y)), k_ops.std(y))
+
+        x = self.input_distribution
+        box_cox_layer = self.box_cox_layer()
+        y_std = graph_wrapper()
+        self._plot_distributions(x, y_std, 0.33, "box-cox-inverse-graph")
+
+    def test_box_cox_zero_lambda(self):
+        x = self.input_distribution
+        y = self.box_cox_layer(lmbda=0)(x)
+        y_std = k_ops.divide(k_ops.subtract(y, k_ops.mean(y)), k_ops.std(y))
+        self._plot_distributions(x, y_std, 0, "box-cox-zero-lambda")
+
+    def test_box_cox_inverse_zero_lambda(self):
+        x = self.inverse_input_distribution
+        y = self.box_cox_layer()(x, inverse=True)
+        self._plot_distributions(x, y, 0, "box-cox-inverse-zero-lambda")
+
+    def test_box_cox_transform_null_values(self):
+        x = k_ops.convert_to_tensor([0, 10, 20])
+        with self.assertRaises(ValueError):
+            self.box_cox_layer()(x)
+
+    def test_box_cox_transform_negative_values(self):
+        x = k_ops.convert_to_tensor([-1, 10, 20])
+        with self.assertRaises(ValueError):
+            self.box_cox_layer()(x)
+
+
+class YeoJohnsonPowerTransformsTest(PowerTransformTest):
+
+    @staticmethod
+    def yeo_johnson_layer(lmbda: float = -2.22) -> YeoJohnson:
+        yeo_johnson_layer = YeoJohnson(lambda_init=lmbda)
+        yeo_johnson_layer.trainable = False
+        return yeo_johnson_layer
+
+    def test_yeo_johnson(self):
+        x = self.input_distribution
+        y = self.yeo_johnson_layer()(x)
+        y_std = k_ops.divide(k_ops.subtract(y, k_ops.mean(y)), k_ops.std(y))
+        self._plot_distributions(x, y_std, -2.22, "yeo-johnson")
+
+    def test_yeo_johnson_inverse(self):
+        x = self.inverse_input_distribution
+        y = self.yeo_johnson_layer()(x, inverse=True)
+        self._plot_distributions(x, y, -2.22, "yeo-johnson-inverse")
+
+    def test_yeo_johnson_zero_lambda(self):
+        x = self.input_distribution
+        y = self.yeo_johnson_layer(lmbda=0)(x)
+        y_std = k_ops.divide(k_ops.subtract(y, k_ops.mean(y)), k_ops.std(y))
+        self._plot_distributions(x, y_std, 0, "yeo-johnson-zero-lambda")
+
+    def test_yeo_johnson_inverse_zero_lambda(self):
+        x = self.inverse_input_distribution
+        y = self.yeo_johnson_layer(lmbda=0)(x, inverse=True)
+        self._plot_distributions(x, y, 0, "yeo-johnson-inverse-zero-lambda")
+
+    def test_yeo_johnson_two_lambda(self):
+        x = self.input_distribution
+        y = self.yeo_johnson_layer(lmbda=2)(x)
+        y_std = k_ops.divide(k_ops.subtract(y, k_ops.mean(y)), k_ops.std(y))
+        self._plot_distributions(x, y_std, 2, "yeo-johnson-two-lambda")
+
+    def test_yeo_johnson_inverse_two_lambda(self):
+        x = self.inverse_input_distribution
+        y = self.yeo_johnson_layer(lmbda=2)(x, inverse=True)
+        self._plot_distributions(x, y, 2, "yeo-johnson-inverse-two-lambda")
 
 
 if __name__ == '__main__':

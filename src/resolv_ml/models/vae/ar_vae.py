@@ -48,7 +48,7 @@ class AttributeRegularizationLayer(LatentCodeProcessingLayer):
             self.regularization_loss_tracker.update_state(reg_loss)
             return latent_codes
         except KeyError as e:
-            raise ValueError(f"VAE attribute regularization layer requires an 'attributes' item in kwargs.") from e
+            raise ValueError("VAE attribute regularization layer requires an 'attributes' item in kwargs.") from e
 
 
 class DefaultAttributeRegularization(AttributeRegularizationLayer):
