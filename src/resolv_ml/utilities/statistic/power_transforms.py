@@ -8,9 +8,13 @@ import keras.ops as k_ops
 
 class PowerTransform(ABC, keras.Layer):
 
-    def __init__(self, lambda_init: float = 1.0, name: str = "power_transform", **kwargs):
+    def __init__(self,
+                 lambda_init: float = 1.0,
+                 batch_norm: keras.layers.BatchNormalization = None,
+                 name: str = "power_transform", **kwargs):
         super(PowerTransform, self).__init__(name=name, **kwargs)
-        self.lambda_init = lambda_init
+        self._lambda_init = lambda_init
+        self._batch_normalization = batch_norm
 
     @abstractmethod
     def _transform(self, inputs):
@@ -23,19 +27,23 @@ class PowerTransform(ABC, keras.Layer):
     # noinspection PyAttributeOutsideInit
     def build(self, input_shape: Tuple[int, ...]):
         self.lmbda = self.add_weight(
-            initializer=keras.initializers.Constant(self.lambda_init),
+            initializer=keras.initializers.Constant(self._lambda_init),
             trainable=True,
             name="lambda"
         )
 
     def call(self, inputs, inverse: bool = False, training: bool = False, **kwargs):
-        return self._transform(inputs) if not inverse else self._inverse_transform(inputs)
+        transformed = self._transform(inputs) if not inverse else self._inverse_transform(inputs)
+        return transformed if not self._batch_normalization or inverse else self._batch_normalization(transformed)
 
 
 class BoxCox(PowerTransform):
 
-    def __init__(self, lambda_init: float = 1.0, name: str = "box_cox_power_transform", **kwargs):
-        super(BoxCox, self).__init__(lambda_init=lambda_init, name=name, **kwargs)
+    def __init__(self,
+                 lambda_init: float = 1.0,
+                 batch_norm: keras.layers.BatchNormalization = None,
+                 name: str = "box_cox_power_transform", **kwargs):
+        super(BoxCox, self).__init__(lambda_init=lambda_init, batch_norm=batch_norm, name=name, **kwargs)
 
     def _transform(self, inputs):
         def error_fn():
@@ -71,8 +79,11 @@ class BoxCox(PowerTransform):
 
 class YeoJohnson(PowerTransform):
 
-    def __init__(self, lambda_init: float = 1.0, name: str = "yeo_johnson_power_transform", **kwargs):
-        super(YeoJohnson, self).__init__(lambda_init=lambda_init, name=name, **kwargs)
+    def __init__(self,
+                 lambda_init: float = 1.0,
+                 batch_norm: keras.layers.BatchNormalization = None,
+                 name: str = "yeo_johnson_power_transform", **kwargs):
+        super(YeoJohnson, self).__init__(lambda_init=lambda_init, batch_norm=batch_norm, name=name, **kwargs)
 
     def _transform(self, inputs):
         def zero_lambda_fn():

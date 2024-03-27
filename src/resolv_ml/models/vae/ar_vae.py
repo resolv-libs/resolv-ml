@@ -111,24 +111,24 @@ class SignAttributeRegularization(AttributeRegularizationLayer):
         return self._gamma * sign_loss
 
 
-class PowerTransformAttributeRegularization(DefaultAttributeRegularization):
+class PowerTransformAttributeRegularization(AttributeRegularizationLayer):
 
     def __init__(self,
                  power_transform: PowerTransform,
                  loss_fn: keras.Loss = keras.losses.mean_absolute_error,
                  gamma: float = 1.0,
                  regularization_dimension: int = 0,
-                 batch_normalization: keras.layers.BatchNormalization = None,
                  name: str = "vae/default_attr_reg",
                  **kwargs):
         super(PowerTransformAttributeRegularization, self).__init__(
             loss_fn=loss_fn,
             gamma=gamma,
             regularization_dimension=regularization_dimension,
-            batch_normalization=batch_normalization,
+            batch_normalization=None,
             name=name,
             **kwargs
         )
+        self._loss_fn = loss_fn
         self._power_transform = power_transform
 
     @property
@@ -137,7 +137,7 @@ class PowerTransformAttributeRegularization(DefaultAttributeRegularization):
 
     def _compute_attribute_regularization_loss(self, latent_codes, attributes, training: bool = False):
         attributes = self._power_transform(attributes, training=training)
-        return super()._compute_attribute_regularization_loss(latent_codes, attributes)
+        return self._loss_fn(latent_codes, attributes)
 
 
 class AttributeRegularizedVAE(keras.Model):
