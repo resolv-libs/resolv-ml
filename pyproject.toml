@@ -14,7 +14,7 @@ authors = [
 maintainers = [
     "Matteo Pettenò <matteo.petteno1@gmail.com>"
 ]
-readme = ["README.md", "src/README.md", "docs/README.md"]
+readme = ["README.md", "src/README.md", "docs/README.md", "tests/README.md"]
 homepage = "https://github.com/resolv-libs/resolv-ml"
 documentation = "https://github.com/resolv-libs/resolv-ml/docs"
 repository = "https://github.com/resolv-libs/resolv-ml"
@@ -43,6 +43,7 @@ tensorflow = { version = "^2.16", optional = true }
 [tool.poetry.group.dev.dependencies]
 
 [tool.poetry.group.test.dependencies]
+matplotlib = "*"
 
 [tool.poetry.group.docs.dependencies]
 

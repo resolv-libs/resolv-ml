@@ -164,3 +164,6 @@ poetry.toml
 
 # Pyenv
 .python-version
+
+# Test
+/tests/utilities/statistic/output/

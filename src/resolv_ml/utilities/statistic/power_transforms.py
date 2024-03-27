@@ -41,7 +41,7 @@ class BoxCox(PowerTransform):
         if k_ops.any(k_ops.less_equal(inputs, 0)):
             raise ValueError('The Box-Cox transformation can only be applied to strictly positive data.')
 
-        if self.lmbda.value() == 0:
+        if self.lmbda.value == 0:
             # WARNING: when Box-Cox returns log(x), the output ceases to depend on lambda. Therefore, the gradient
             # w.r.t. lambda becomes identically zero. As such, lambda is not connected to the autograd graph anymore,
             # and cannot be optimized via (simple) gradient descent. However, it might still work with inertial
@@ -49,15 +49,15 @@ class BoxCox(PowerTransform):
             return k_ops.log(inputs)
 
         else:
-            numerator = k_ops.subtract(k_ops.power(inputs, self.lmbda) - 1)
+            numerator = k_ops.subtract(k_ops.power(inputs, self.lmbda), 1)
             denominator = self.lmbda
             return k_ops.divide(numerator, denominator)
 
     def _inverse_transform(self, inputs):
-        if self.lmbda.value() == 0:
+        if self.lmbda.value == 0:
             return k_ops.exp(inputs)
         else:
-            power_base = k_ops.sum(k_ops.multiply(inputs, self.lmbda), 1)
+            power_base = k_ops.add(k_ops.multiply(inputs, self.lmbda), 1)
             power_exp = k_ops.divide(1, self.lmbda)
             return k_ops.power(power_base, power_exp)
 
@@ -70,17 +70,17 @@ class YeoJohnson(PowerTransform):
     def _transform(self, inputs):
         x_pos, x_neg = self._get_positive_and_negative_inputs(inputs)
 
-        if self.lmbda.value() == 0:
+        if self.lmbda.value == 0:
             y_pos = k_ops.log1p(x_pos)
         else:
-            numerator = k_ops.subtract(k_ops.power(k_ops.sum(x_pos, 1), self.lmbda), 1)
+            numerator = k_ops.subtract(k_ops.power(k_ops.add(x_pos, 1), self.lmbda), 1)
             denominator = self.lmbda
             y_pos = k_ops.divide(numerator, denominator)
 
-        if self.lmbda.value() == 2:
+        if self.lmbda.value == 2:
             y_neg = -k_ops.log1p(-x_neg)
         else:
-            numerator = -(k_ops.power(k_ops.sum(-x_neg, 1), k_ops.subtract(2, self.lmbda) - 1))
+            numerator = -(k_ops.power(k_ops.add(-x_neg, 1), k_ops.subtract(2, self.lmbda) - 1))
             denominator = k_ops.subtract(2, self.lmbda)
             y_neg = k_ops.divide(numerator, denominator)
 
@@ -89,17 +89,17 @@ class YeoJohnson(PowerTransform):
     def _inverse_transform(self, inputs):
         x_pos, x_neg = self._get_positive_and_negative_inputs(inputs)
 
-        if self.lmbda.value() == 0:
+        if self.lmbda.value == 0:
             y_pos = k_ops.subtract(k_ops.exp(x_pos), 1)
         else:
-            power_base = k_ops.sum(k_ops.multiply(self.lmbda, x_pos), 1)
+            power_base = k_ops.add(k_ops.multiply(self.lmbda, x_pos), 1)
             power_exp = k_ops.divide(1, self.lmbda)
             y_pos = k_ops.subtract(k_ops.power(power_base, power_exp), 1)
 
-        if self.lmbda.value() == 2:
+        if self.lmbda.value == 2:
             y_neg = k_ops.subtract(1, k_ops.exp(-x_neg))
         else:
-            power_base = k_ops.sum(k_ops.multiply(-k_ops.subtract(2, self.lmbda), x_neg), 1)
+            power_base = k_ops.add(k_ops.multiply(-k_ops.subtract(2, self.lmbda), x_neg), 1)
             power_exp = k_ops.divide(1, k_ops.subtract(2, self.lmbda))
             y_neg = k_ops.subtract(1, k_ops.power(power_base, power_exp))
 
