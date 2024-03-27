@@ -33,11 +33,11 @@ class PowerTransformTest(unittest.TestCase):
 
     @property
     def input_distribution(self):
-        return keras.random.beta(shape=(1000,), alpha=2, beta=6)
+        return keras.random.beta(shape=(1000, 1), alpha=2, beta=6)
 
     @property
     def inverse_input_distribution(self):
-        return keras.random.normal(shape=(1000,), mean=0, stddev=1)
+        return keras.random.normal(shape=(1000, 1), mean=0, stddev=1)
 
     @property
     def output_dir(self) -> Path:
@@ -47,7 +47,7 @@ class PowerTransformTest(unittest.TestCase):
         self.output_dir.mkdir(exist_ok=True)
 
     def test_box_cox_transform_negative_values(self):
-        x = k_ops.convert_to_tensor([-1, 0, 10, 20])
+        x = keras.random.uniform(shape=(1000, 1), minval=-1, maxval=1)
         with self.assertRaises(ValueError):
             self.box_cox_layer(x)
 
@@ -77,8 +77,8 @@ class PowerTransformTest(unittest.TestCase):
                         'font.serif': 'Computer Modern Roman', 'lines.linewidth': 2})
     def _plot_distributions(self, x, y, lmbda: float, output_fig_name: str):
         fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True, tight_layout=True)
-        ax1.hist(x)
-        ax2.hist(y)
+        ax1.hist(k_ops.reshape(x, [-1]))
+        ax2.hist(k_ops.reshape(y, [-1]))
         ax1.set_axisbelow(True)
         ax1.grid(linestyle=':')
         ax2.set_axisbelow(True)
