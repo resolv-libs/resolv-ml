@@ -42,7 +42,7 @@ class BoxCox(PowerTransform):
     def __init__(self,
                  lambda_init: float = 1.0,
                  batch_norm: keras.layers.BatchNormalization = None,
-                 name: str = "box_cox_power_transform", **kwargs):
+                 name: str = "box_cox", **kwargs):
         super(BoxCox, self).__init__(lambda_init=lambda_init, batch_norm=batch_norm, name=name, **kwargs)
 
     def _transform(self, inputs):
@@ -66,7 +66,7 @@ class YeoJohnson(PowerTransform):
     def __init__(self,
                  lambda_init: float = 1.0,
                  batch_norm: keras.layers.BatchNormalization = None,
-                 name: str = "yeo_johnson_power_transform", **kwargs):
+                 name: str = "yeo_johnson", **kwargs):
         super(YeoJohnson, self).__init__(lambda_init=lambda_init, batch_norm=batch_norm, name=name, **kwargs)
 
     def _transform(self, inputs):
