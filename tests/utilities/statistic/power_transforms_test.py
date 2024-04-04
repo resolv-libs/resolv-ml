@@ -23,13 +23,11 @@ class PowerTransformTest(unittest.TestCase):
 
     @property
     def output_dir(self) -> Path:
-        return Path("./output/power-transforms")
+        return Path("./output/utilities/statistic/power-transforms")
 
     def setUp(self):
-        self.output_dir.mkdir(exist_ok=True)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    @mpl.rc_context(rc={'text.usetex': True, 'font.family': 'serif', 'font.size': 18,
-                        'font.serif': 'Computer Modern Roman', 'lines.linewidth': 2})
     def _plot_distributions(self, x, y, lmbda: float, output_fig_name: str):
         fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True, tight_layout=True)
         ax1.hist(k_ops.reshape(x, [-1]))
@@ -48,24 +46,26 @@ class BoxCoxPowerTransformsTest(PowerTransformTest):
 
     @staticmethod
     def box_cox_layer(lmbda: float = 0.33) -> BoxCox:
-        box_cox_layer = BoxCox(lambda_init=lmbda, batch_norm=keras.layers.BatchNormalization())
+        box_cox_layer = BoxCox(lambda_init=lmbda)
         box_cox_layer.trainable = False
         return box_cox_layer
 
     def test_box_cox(self):
         x = self.input_distribution
         y = self.box_cox_layer()(x)
-        self._plot_distributions(x, y, 0.33, "box-cox")
+        y_std = k_ops.divide(k_ops.subtract(y, k_ops.mean(y)), k_ops.std(y))
+        self._plot_distributions(x, y_std, 0.33, "box-cox")
 
     def test_box_cox_graph(self):
         @tf.function
         def graph_wrapper():
-            return box_cox_layer(x)
+            y = box_cox_layer(x)
+            return k_ops.divide(k_ops.subtract(y, k_ops.mean(y)), k_ops.std(y))
 
         x = self.input_distribution
         box_cox_layer = self.box_cox_layer()
-        y = graph_wrapper()
-        self._plot_distributions(x, y, 0.33, "box-cox-graph")
+        y_std = graph_wrapper()
+        self._plot_distributions(x, y_std, 0.33, "box-cox-graph")
 
     def test_box_cox_inverse(self):
         x = self.inverse_input_distribution
@@ -91,16 +91,6 @@ class BoxCoxPowerTransformsTest(PowerTransformTest):
         x = self.inverse_input_distribution
         y = self.box_cox_layer()(x, inverse=True)
         self._plot_distributions(x, y, 0, "box-cox-inverse-zero-lambda")
-
-    def test_box_cox_transform_null_values(self):
-        x = k_ops.convert_to_tensor([0, 10, 20])
-        with self.assertRaises(ValueError):
-            self.box_cox_layer()(x)
-
-    def test_box_cox_transform_negative_values(self):
-        x = k_ops.convert_to_tensor([-1, 10, 20])
-        with self.assertRaises(ValueError):
-            self.box_cox_layer()(x)
 
 
 class YeoJohnsonPowerTransformsTest(PowerTransformTest):

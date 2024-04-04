@@ -166,4 +166,4 @@ poetry.toml
 .python-version
 
 # Test
-/tests/utilities/statistic/output/
+/tests/**/output/
