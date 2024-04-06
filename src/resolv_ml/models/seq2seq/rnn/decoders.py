@@ -3,34 +3,37 @@ from typing import Tuple, List
 
 import keras
 import keras.ops as k_ops
+from keras.src.layers.rnn.dropout_rnn_cell import DropoutRNNCell
 
-from resolv_ml.models.vae.base import VAEDecoder
-from resolv_ml.utilities.nn import rnn as rnn_utils
+from . import layers as rnn_layers
+from ..base import SequenceDecoder
 
 
-class LSTMDecoder(VAEDecoder):
+class RNNAutoregressiveDecoder(SequenceDecoder):
 
     def __init__(self,
                  dec_rnn_sizes: List[int],
-                 lstm_dropout: float = 0.0,
-                 name: str = "vae/lstm_decoder",
+                 rnn_cell: DropoutRNNCell = None,
+                 dropout: float = 0.0,
+                 name: str = "rnn_decoder",
                  **kwargs):
-        super(LSTMDecoder, self).__init__(name=name, **kwargs)
+        super(RNNAutoregressiveDecoder, self).__init__(name=name, **kwargs)
         self._stacked_rnn_sizes = dec_rnn_sizes
-        self._dropout = lstm_dropout
+        self._rnn_cell = rnn_cell
+        self._dropout = dropout
 
     # noinspection PyAttributeOutsideInit
     def build(self, input_shape: List[Tuple[int, ...]], **kwargs):
         input_sequence_shape = input_shape[0]
         batch_size, sequence_length, token_size = input_sequence_shape
-        self._initial_state_layer = rnn_utils.InitialRNNCellStateFromEmbedding(layers_sizes=self._stacked_rnn_sizes,
-                                                                               name=f"{self.name}/z_to_initial_state")
-        self._stacked_lstm_cells = rnn_utils.StackedLSTM(
+        self._initial_state_layer = rnn_layers.InitialRNNCellStateFromEmbedding(layers_sizes=self._stacked_rnn_sizes,
+                                                                                name=f"{self.name}/z_to_initial_state")
+        self._stacked_rnn_cells = rnn_layers.StackedRNN(
             layers_sizes=self._stacked_rnn_sizes,
             return_sequences=False,
             return_state=True,
             lstm_dropout=self._dropout,
-            name=f"{self.name}/stacked_lstm_cells"
+            name=f"{self.name}/stacked_rnn_cells"
         )
         self._output_projection = keras.layers.Dense(
             units=token_size,
@@ -41,7 +44,7 @@ class LSTMDecoder(VAEDecoder):
             name=f"{self.name}/output_projection"
         )
 
-    def _decode(self, input_sequence, embedding, teacher_force_probability, training: bool = False, **kwargs):
+    def decode(self, input_sequence, embedding, teacher_force_probability, training: bool = False, **kwargs):
         batch_size, sequence_length, token_size = input_sequence.shape
         # Expand embedding dims to allow for concatenation with the decoder input
         embedding = k_ops.expand_dims(embedding, axis=1)
@@ -50,9 +53,9 @@ class LSTMDecoder(VAEDecoder):
         output_sequence = []
         for i in range(sequence_length):
             decoder_input = k_ops.concatenate([decoder_input, embedding], axis=-1)
-            dec_emb_output, *initial_state = self._stacked_lstm_cells(decoder_input,
-                                                                      initial_state=initial_state,
-                                                                      training=training)
+            dec_emb_output, *initial_state = self._stacked_rnn_cells(decoder_input,
+                                                                     initial_state=initial_state,
+                                                                     training=training)
             note_emb_out = self._output_projection(dec_emb_output, training=training)
             use_teacher_force = keras.random.randint() < teacher_force_probability
             decoder_input = k_ops.expand_dims(input_sequence[:, i, :], axis=1) if use_teacher_force else note_emb_out
@@ -60,23 +63,23 @@ class LSTMDecoder(VAEDecoder):
         return k_ops.concatenate(output_sequence, axis=1)
 
 
-class HierarchicalLSTMDecoder(VAEDecoder):
+class HierarchicalRNNDecoder(SequenceDecoder):
 
     def __init__(self,
                  level_lengths: List[int],
-                 core_decoder: VAEDecoder,
+                 core_decoder: SequenceDecoder,
                  dec_rnn_sizes: List[int],
-                 lstm_dropout: float = 0.0,
+                 dropout: float = 0.0,
                  name="vae/hierarchical_decoder",
                  **kwargs):
-        super(HierarchicalLSTMDecoder, self).__init__(name=name, **kwargs)
+        super(HierarchicalRNNDecoder, self).__init__(name=name, **kwargs)
         self._level_lengths = level_lengths
         self._num_levels = len(level_lengths) - 1  # subtract 1 for the core decoder level
         self._core_decoder = core_decoder
         self._stacked_rnn_sizes = dec_rnn_sizes
-        self._dropout = lstm_dropout
-        self._hierarchical_initial_states: List[rnn_utils.InitialRNNCellStateFromEmbedding] = []
-        self._stacked_hierarchical_lstm_cells: List[rnn_utils.StackedLSTM] = []
+        self._dropout = dropout
+        self._hierarchical_initial_states: List[rnn_layers.InitialRNNCellStateFromEmbedding] = []
+        self._stacked_hierarchical_lstm_cells: List[rnn_layers.StackedRNN] = []
 
     # noinspection PyAttributeOutsideInit
     def build(self, input_shapes: List[Tuple[int, ...]], **kwargs):
@@ -89,12 +92,14 @@ class HierarchicalLSTMDecoder(VAEDecoder):
                              f"equal the input sequence length {input_sequence_length}.")
         # Build hierarchical layers.
         for level_idx in range(self._num_levels):
-            self._hierarchical_initial_states = rnn_utils.InitialRNNCellStateFromEmbedding(
-                layers_sizes=self._stacked_rnn_sizes,
-                name=f"{self.name}/level_{level_idx}_emb_to_initial_state"
+            self._hierarchical_initial_states.append(
+                rnn_layers.InitialRNNCellStateFromEmbedding(
+                    layers_sizes=self._stacked_rnn_sizes,
+                    name=f"{self.name}/level_{level_idx}_emb_to_initial_state"
+                )
             )
             self._stacked_hierarchical_lstm_cells.append(
-                rnn_utils.StackedLSTM(
+                rnn_layers.StackedRNN(
                     layers_sizes=self._stacked_rnn_sizes,
                     return_sequences=False,
                     return_state=True,
@@ -103,7 +108,7 @@ class HierarchicalLSTMDecoder(VAEDecoder):
                 )
             )
 
-    def _decode(self, input_sequence, z, teacher_force_probability, training: bool = False, **kwargs):
+    def decode(self, input_sequence, z, teacher_force_probability, training: bool = False, **kwargs):
 
         def base_decode(embedding, path: List[int] = None):
             """Base function for hierarchical decoder."""

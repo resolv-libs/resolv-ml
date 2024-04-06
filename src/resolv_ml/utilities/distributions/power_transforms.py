@@ -17,11 +17,11 @@ class PowerTransform(ABC, keras.Layer):
         self._batch_normalization = batch_norm
 
     @abstractmethod
-    def _transform(self, inputs):
+    def transform(self, inputs):
         pass
 
     @abstractmethod
-    def _inverse_transform(self, inputs):
+    def inverse_transform(self, inputs):
         pass
 
     # noinspection PyAttributeOutsideInit
@@ -33,7 +33,7 @@ class PowerTransform(ABC, keras.Layer):
         )
 
     def call(self, inputs, inverse: bool = False, training: bool = False, **kwargs):
-        transformed = self._transform(inputs) if not inverse else self._inverse_transform(inputs)
+        transformed = self.transform(inputs) if not inverse else self.inverse_transform(inputs)
         return transformed if not self._batch_normalization or inverse else self._batch_normalization(transformed)
 
 
@@ -45,7 +45,7 @@ class BoxCox(PowerTransform):
                  name: str = "box_cox", **kwargs):
         super(BoxCox, self).__init__(lambda_init=lambda_init, batch_norm=batch_norm, name=name, **kwargs)
 
-    def _transform(self, inputs):
+    def transform(self, inputs):
         # WARNING: input values must be > 0.
         # WARNING: when lambda = 0, Box-Cox returns log(x), the output ceases to depend on lambda. Therefore, the
         # gradient  w.r.t. lambda becomes identically zero. As such, lambda is not connected to the autograd graph
@@ -55,7 +55,7 @@ class BoxCox(PowerTransform):
                           true_fn=lambda: k_ops.log(inputs),
                           false_fn=lambda: (k_ops.power(inputs, self.lmbda) - 1) / self.lmbda)
 
-    def _inverse_transform(self, inputs):
+    def inverse_transform(self, inputs):
         return k_ops.cond(pred=k_ops.abs(self.lmbda) == 0,
                           true_fn=lambda: k_ops.exp(inputs),
                           false_fn=lambda: k_ops.power(inputs * self.lmbda + 1, 1 / self.lmbda))
@@ -69,7 +69,7 @@ class YeoJohnson(PowerTransform):
                  name: str = "yeo_johnson", **kwargs):
         super(YeoJohnson, self).__init__(lambda_init=lambda_init, batch_norm=batch_norm, name=name, **kwargs)
 
-    def _transform(self, inputs):
+    def transform(self, inputs):
         x_pos, x_neg = self._get_positive_and_negative_inputs(inputs)
         y_pos = k_ops.cond(pred=k_ops.abs(self.lmbda) == 0,
                            true_fn=lambda: k_ops.log1p(x_pos),
@@ -80,7 +80,7 @@ class YeoJohnson(PowerTransform):
                            false_fn=lambda: -(k_ops.power(-x_neg + 1, 2 - self.lmbda) - 1) / (2 - self.lmbda))
         return y_pos + y_neg
 
-    def _inverse_transform(self, inputs):
+    def inverse_transform(self, inputs):
         x_pos, x_neg = self._get_positive_and_negative_inputs(inputs)
         y_pos = k_ops.cond(pred=k_ops.abs(self.lmbda) == 0,
                            true_fn=lambda: k_ops.exp(x_pos) - 1,
