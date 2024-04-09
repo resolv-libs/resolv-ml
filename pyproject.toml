@@ -34,14 +34,14 @@ packages = [
 include = ["CHANGELOG.md"]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = ">=3.9,<3.12"
 keras = "^3.0"
 
 [tool.poetry.group.dev.dependencies]
 
 [tool.poetry.group.test.dependencies]
 matplotlib = "*"
-tensorflow = "^2.16.1"
+resolv-pipelines = {git = "ssh://git@github.com/resolv-libs/resolv-pipelines.git", rev = "main"}
 
 [tool.poetry.group.docs.dependencies]
 

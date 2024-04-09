@@ -5,7 +5,7 @@ from typing import Tuple
 import keras
 import keras.ops as k_ops
 
-from .vanilla import StandardVAE
+from .vanilla_vae import StandardVAE
 from ....utilities.math.distances import compute_pairwise_distance_matrix
 from ....utilities.distributions.power_transforms import PowerTransform
 

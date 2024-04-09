@@ -1,4 +1,5 @@
 # TODO - DOC
+import copy
 from typing import List, Tuple, Any
 
 import keras
@@ -6,124 +7,137 @@ import keras.ops as k_ops
 from keras.src.layers.rnn.dropout_rnn_cell import DropoutRNNCell
 
 
-def get_default_rnn_cell(cell_size: int):
+def get_default_rnn_cell(cell_size: int, dropout: float) -> keras.layers.LSTMCell:
     return keras.layers.LSTMCell(
-                units=cell_size,
-                activation="tanh",
-                recurrent_activation="sigmoid",
-                use_bias=True,
-                kernel_initializer="glorot_uniform",
-                recurrent_initializer="orthogonal",
-                bias_initializer="zeros",
-                unit_forget_bias=True,
-                kernel_regularizer=None,
-                recurrent_regularizer=None,
-                bias_regularizer=None,
-                kernel_constraint=None,
-                recurrent_constraint=None,
-                bias_constraint=None,
-                dropout=0.0,
-                recurrent_dropout=0.0,
-                seed=None
-            )
+        units=cell_size,
+        activation="tanh",
+        recurrent_activation="sigmoid",
+        use_bias=True,
+        kernel_initializer="glorot_uniform",
+        recurrent_initializer="orthogonal",
+        bias_initializer="zeros",
+        unit_forget_bias=True,
+        kernel_regularizer=None,
+        recurrent_regularizer=None,
+        bias_regularizer=None,
+        kernel_constraint=None,
+        recurrent_constraint=None,
+        bias_constraint=None,
+        dropout=dropout,
+        recurrent_dropout=0.0,
+        seed=None
+    )
 
 
+@keras.saving.register_keras_serializable(package="RNNLayers", name="InitialRNNCellStateFromEmbedding")
 class InitialRNNCellStateFromEmbedding(keras.Layer):
 
-    class SplitAndPackCellStates(keras.Layer):
-
-        def __init__(self, split_indexes: List[int], name="split_and_pack"):
-            super(InitialRNNCellStateFromEmbedding.SplitAndPackCellStates, self).__init__(name=name)
-            self._split_indexes = split_indexes
-
-        def call(self, cell_states, **kwargs):
-            split_indexes = [sum(flatten_state_sizes[:i + 1]) - 1 for i in range(len(flatten_state_sizes))]
-            split_cell_states = k_ops.split(cell_states, indices_or_sections=self._split_indexes, axis=-1)
-            even_indices = k_ops.arange(start=0, stop=cell_states_size, step=2)
-            odd_indices = k_ops.arange(start=1, stop=cell_states_size, step=2)
-            even_cell_states = k_ops.take(cell_states, indices=even_indices, axis=-1)
-            odd_cell_states = k_ops.take(cell_states, indices=odd_indices, axis=-1)
-            packed_states = k_ops.stack([even_cell_states, odd_cell_states], axis=-1)
-            return packed_states
-
-    def __init__(self, layers_sizes: List[int], name="z_to_initial_state", **kwargs):
+    def __init__(self, cell_state_size, name="z_to_initial_state", **kwargs):
         super(InitialRNNCellStateFromEmbedding, self).__init__(name=name, **kwargs)
-        self._layers_sizes = layers_sizes
-
-    # noinspection PyAttributeOutsideInit
-    def build(self, input_shape: Tuple[int, ...]):
+        self._cell_state_size = cell_state_size
         self._initial_cell_states = keras.layers.Dense(
-            units=sum(self._get_flatten_states_sizes()),
+            units=sum(self._get_flatten_state_sizes()),
             activation='tanh',
             use_bias=True,
             kernel_initializer=keras.initializers.RandomNormal(stddev=0.001),
-            name=f"{self.name}/dense"
+            name="dense"
         )
-        self._split_and_pack_cell_states = self.SplitAndPackCellStates(name=f"{self.name}/split_and_pack")
 
-    def call(self, embedding, training=False, *args, **kwargs):
-        initial_cell_states = self._initial_cell_states(embedding, training=training)
-        return self._split_and_pack_cell_states(initial_cell_states, training=training)
+    def build(self, input_shape):
+        super().build(input_shape)
+        self._initial_cell_states.build(input_shape)
 
-    def _get_flatten_states_sizes(self):
-        return [item for item in self._layers_sizes for _ in range(2)]
+    def call(self, inputs, training: bool = False, *args, **kwargs):
+        initial_cell_states = self._initial_cell_states(inputs, training=training)
+        split_indexes = k_ops.cumsum(self._get_flatten_state_sizes()).numpy()[:-1]
+        split_states = k_ops.split(initial_cell_states, indices_or_sections=split_indexes, axis=-1)
+        packed_states = [[split_states[i], split_states[i + 1]] for i in range(0, len(split_states), 2)]
+        return packed_states
+
+    def compute_output_shape(self, input_shape):
+        return self._cell_state_size
+
+    def get_config(self):
+        base_config = super().get_config()
+        config = {
+            "cell_state_size": self._cell_state_size,
+            "initial_cell_states": keras.saving.serialize_keras_object(self._initial_cell_states),
+        }
+        return {**base_config, **config}
+
+    @classmethod
+    def from_config(cls, config):
+        stacked_rnn_cells = keras.layers.deserialize(config.pop("stacked_rnn_cells"))
+        return cls(stacked_rnn_cells, **config)
+
+    def _get_flatten_state_sizes(self):
+        return k_ops.ravel(self._cell_state_size).numpy()
 
 
+@keras.saving.register_keras_serializable(package="RNNLayers", name="StackedRNN")
 class StackedRNN(keras.Layer):
 
     def __init__(self,
                  layers_sizes: List[int],
-                 rnn_cell: DropoutRNNCell = None,
+                 rnn_cell: Any = None,
+                 dropout: float = 0.0,
                  return_sequences: bool = False,
                  return_state: bool = True,
-                 dropout: float = 0.0,
                  go_backwards: bool = False,
                  stateful: bool = False,
-                 time_major: bool = False,
                  unroll: bool = False,
                  zero_output_for_mask: bool = False,
                  name="stacked_rnn", **kwargs):
         super(StackedRNN, self).__init__(name=name, **kwargs)
-        self._stacked_rnn_sizes = layers_sizes
-        self._rnn_cell = rnn_cell
-        self._return_sequences = return_sequences
-        self._return_state = return_state
-        self._dropout = dropout
-        self._go_backwards = go_backwards
-        self._stateful = stateful
-        self._time_major = time_major
-        self._unroll = unroll
-        self._zero_output_for_mask = zero_output_for_mask
-
-    # noinspection PyAttributeOutsideInit
-    def build(self, input_shape: Tuple[int, ...], **kwargs):
-
-        def build_rnn_cells(units: int):
-            rnn_cell = self._rnn_cell if self._rnn_cell else get_default_rnn_cell(units)
-            rnn_cell.dropout = self._dropout
-            return rnn_cell
-
         self._stacked_rnn_cells = keras.layers.RNN(
-            [build_rnn_cells(rnn_size) for rnn_size in self._stacked_rnn_sizes],
-            return_sequences=self._return_sequences,
-            return_state=self._return_state,
-            go_backwards=self._go_backwards,
-            stateful=self._stateful,
-            time_major=self._time_major,
-            unroll=self._unroll,
-            zero_output_for_mask=self._zero_output_for_mask,
+            cell=rnn_cell if rnn_cell else [get_default_rnn_cell(rnn_size, dropout) for rnn_size in layers_sizes],
+            return_sequences=return_sequences,
+            return_state=return_state,
+            go_backwards=go_backwards,
+            stateful=stateful,
+            unroll=unroll,
+            zero_output_for_mask=zero_output_for_mask,
             name="stacked_rnn_cells"
         )
 
-    def call(self, inputs, initial_states, training: bool = False, mask=None, **kwargs) -> Any:
-        return self._stacked_rnn_cells(inputs, initial_states=initial_states, training=training, mask=mask)
+    @property
+    def state_size(self):
+        return self._stacked_rnn_cells.state_size
+
+    def build(self, input_shape):
+        super().build(input_shape)
+        self._stacked_rnn_cells.build(input_shape)
+
+    def call(self, inputs, training: bool = False, **kwargs) -> Any:
+        return self._stacked_rnn_cells(inputs, initial_state=kwargs.get("initial_state"), mask=kwargs.get("mask"),
+                                       training=training)
+
+    def compute_output_shape(self, input_shape):
+        return self._stacked_rnn_cells.compute_output_shape(input_shape)
+
+    def get_initial_state(self, batch_size):
+        return self._stacked_rnn_cells.get_initial_state(batch_size)
+
+    def get_config(self):
+        base_config = super().get_config()
+        config = {
+            "stacked_rnn_cells": keras.saving.serialize_keras_object(self._stacked_rnn_cells),
+        }
+        return {**base_config, **config}
+
+    @classmethod
+    def from_config(cls, config):
+        stacked_rnn_cells = keras.saving.deserialize_keras_object(config.pop("stacked_rnn_cells"))
+        return cls(stacked_rnn_cells, **config)
 
 
+@keras.saving.register_keras_serializable(package="RNNLayers", name="StackedBidirectionalRNN")
 class StackedBidirectionalRNN(keras.Layer):
 
     def __init__(self,
                  layers_sizes: List[int],
                  rnn_cell: DropoutRNNCell = None,
+                 merge_modes: List[str] = None,
                  return_sequences: bool = False,
                  return_state: bool = True,
                  dropout: float = 0.0,
@@ -131,42 +145,44 @@ class StackedBidirectionalRNN(keras.Layer):
         super(StackedBidirectionalRNN, self).__init__(name=name, **kwargs)
         if not layers_sizes:
             raise ValueError("No layers provided. Please provide a list containing the layers sizes.")
-        self._layers_sizes = layers_sizes
-        self._rnn_cell = rnn_cell
         self._return_sequences = return_sequences
         self._return_state = return_state
-        self._dropout = dropout
         self._layers: List[keras.layers.Bidirectional] = []
-
-    def _get_base_rnn_layer(self, units: int, return_sequences: bool = True):
-        rnn_cell = self._rnn_cell if self._rnn_cell else get_default_rnn_cell(units)
-        rnn_cell.dropout = self._dropout
-        return keras.layers.RNN(
-            rnn_cell,
-            return_sequences=return_sequences,
-            return_state=True,
-            go_backwards=False,
-            stateful=False,
-            time_major=False,
-            unroll=False,
-            zero_output_for_mask=False
-        )
-
-    def build(self, input_shape: Tuple[int, ...]):
-        for i, layer_size in enumerate(self._layers_sizes):
-            is_output_layer = i == len(self._layers_sizes) - 1
-            is_return_sequences_layer = self._return_sequences if is_output_layer else True
-            base_rnn_units = self._get_base_rnn_layer(layer_size, return_sequences=is_return_sequences_layer)
+        for i, layer_size in enumerate(layers_sizes):
+            is_output_layer = (i == len(layers_sizes) - 1)
+            is_return_sequences_layer = return_sequences if is_output_layer else True
             self._layers.append(
                 keras.layers.Bidirectional(
-                    units=base_rnn_units,
-                    merge_mode="concat",
+                    layer=keras.layers.RNN(
+                        rnn_cell if rnn_cell else get_default_rnn_cell(layer_size, dropout),
+                        return_sequences=is_return_sequences_layer,
+                        return_state=True,
+                        go_backwards=False,
+                        stateful=False,
+                        unroll=False,
+                        zero_output_for_mask=False
+                    ),
+                    merge_mode=merge_modes[i] if merge_modes else "concat",
                     weights=None,
                     backward_layer=None
                 )
             )
 
-    def call(self, inputs, initial_states_fw, initial_states_bw, training: bool = False, mask=None, **kwargs) -> Any:
+    @property
+    def state_size(self):
+        return [self._layers[0].forward_layer.state_size, self._layers[0].backward_layer.state_size]
+
+    def build(self, input_shape):
+        super().build(input_shape)
+        for i, layer in enumerate(self._layers):
+            layer.build(input_shape)
+            output_shape = self._compute_layer_output_shape(layer, input_shape)
+            input_shape, _ = output_shape[0], output_shape[1:]
+
+    def call(self, inputs, training: bool = False, **kwargs):
+        initial_states_fw = kwargs.get("initial_states_fw")
+        initial_states_bw = kwargs.get("initial_states_bw")
+
         if (initial_states_fw and
                 (not isinstance(initial_states_fw, list) or len(initial_states_fw) != len(self._layers))):
             raise ValueError("initial_states_fw must be a list of state tensors (one per layer).")
@@ -174,17 +190,69 @@ class StackedBidirectionalRNN(keras.Layer):
         if (initial_states_bw and
                 (not isinstance(initial_states_bw, list) or len(initial_states_bw) != len(self._layers))):
             raise ValueError("initial_states_bw must be a list of state tensors (one per layer).")
+
         hidden_states = []
         cell_states = []
         prev_output = inputs
         for layer_idx, layer in enumerate(self._layers):
-            initial_states = keras.layers.Concatenate(initial_states_fw[layer_idx], initial_states_bw[layer_idx])
-            output, fw_h, fw_c, bw_h, bw_c = self._layers[layer_idx](prev_output, initial_states=initial_states,
-                                                                     training=training, mask=mask)
-            state_h = keras.layers.Concatenate([fw_h, bw_h])
-            state_c = keras.layers.Concatenate([fw_c, bw_c])
+            if initial_states_fw is None or initial_states_bw is None:
+                initial_state = None
+            else:
+                initial_state = k_ops.concatenate([initial_states_fw[layer_idx], initial_states_bw[layer_idx]])
+            output, fw_h, fw_c, bw_h, bw_c = self._layers[layer_idx](prev_output, initial_state=initial_state,
+                                                                     training=training, mask=kwargs.get("mask"))
+            state_h = k_ops.concatenate([fw_h, bw_h], axis=-1)
+            state_c = k_ops.concatenate([fw_c, bw_c], axis=-1)
             prev_output = output
             hidden_states.append(state_h)
             cell_states.append(state_c)
 
         return (prev_output, hidden_states[-1], cell_states[-1]) if self._return_state else prev_output
+
+    def compute_output_shape(self, input_shape, initial_state_shape=None):
+        output_shape = input_shape
+        state_shape = None
+        for i, layer in enumerate(self._layers):
+            output_shape = self._compute_layer_output_shape(layer, output_shape, initial_state_shape)
+            output_shape, state_shape = output_shape[0], output_shape[1:]
+        if self._return_state:
+            state_shape = list(state_shape[0])
+            state_shape[-1] *= 2
+            state_shape = (tuple(state_shape),) + (tuple(state_shape),)
+            return (output_shape,) + state_shape
+        return output_shape
+
+    def get_initial_state(self, batch_size):
+        return [self._layers[0].forward_layer.get_initial_state(batch_size),
+                self._layers[0].backward_layer.state_size.get_initial_state(batch_size)]
+
+    def get_config(self):
+        base_config = super().get_config()
+        config = {
+            "return_sequences": self._return_sequences,
+            "return_state": self._return_state,
+            "layers": [keras.saving.serialize_keras_object(layer) for layer in self._layers],
+        }
+        return {**base_config, **config}
+
+    @classmethod
+    def from_config(cls, config):
+        layers = [keras.layers.deserialize(layer) for layer in config.pop("layers")]
+        return cls(layers, **config)
+
+    @classmethod
+    def _compute_layer_output_shape(cls, layer, input_shape, initial_state_shape=None):
+        # TODO - Is this a Keras bug?
+        # return self._layers[-1].compute_output_shape(input_shape)
+        output_shape = layer.forward_layer.compute_output_shape(input_shape, initial_state_shape)
+        if layer.return_state:
+            output_shape, state_shape = output_shape[0], output_shape[1:]
+        if layer.merge_mode == "concat":
+            output_shape = list(output_shape)
+            output_shape[-1] *= 2
+            output_shape = tuple(output_shape)
+        elif layer.merge_mode is None:
+            output_shape = output_shape, copy.copy(output_shape)
+        if layer.return_state:
+            return (output_shape,) + state_shape + copy.copy(state_shape)
+        return output_shape
