@@ -1,6 +1,5 @@
 # TODO - DOC
 from abc import abstractmethod
-from typing import Tuple
 
 import keras
 import keras.ops as k_ops
@@ -32,23 +31,11 @@ class AttributeRegularizationLayer(keras.Layer):
     def _compute_attribute_regularization_loss(self, latent_codes, attributes, training: bool = False):
         pass
 
-    @property
-    def metrics(self):
-        return [self.regularization_loss_tracker]
-
-    # noinspection PyAttributeOutsideInit
-    def build(self, input_shape: Tuple[int, ...]):
-        self.regularization_loss_tracker = keras.metrics.Mean(name=self.regularization_name)
-
-    def call(self, latent_codes, inputs, training: bool = False, **kwargs):
-        try:
-            latent_dimension = latent_codes[:, self._regularization_dimension]
-            reg_loss = self._compute_attribute_regularization_loss(latent_dimension, kwargs["attributes"], training)
-            self.add_loss(self._gamma * reg_loss)
-            self.regularization_loss_tracker.update_state(reg_loss)
-            return latent_codes
-        except KeyError as e:
-            raise ValueError("VAE attribute regularization layer requires an 'attributes' item in kwargs.") from e
+    def call(self, inputs, training: bool = False, **kwargs):
+        _, attributes, _, z, _ = inputs
+        latent_dimension = z[:, self._regularization_dimension]
+        reg_loss = self._compute_attribute_regularization_loss(latent_dimension, attributes, training)
+        return self._gamma * reg_loss
 
 
 class DefaultAttributeRegularization(AttributeRegularizationLayer):
@@ -108,7 +95,7 @@ class SignAttributeRegularization(AttributeRegularizationLayer):
         lc_tanh = k_ops.tanh(lc_dist_mat * self._scale_factor)
         attribute_sign = k_ops.sign(attribute_dist_mat)
         sign_loss = self._loss_fn(lc_tanh, attribute_sign)
-        return self._gamma * sign_loss
+        return sign_loss
 
 
 class PowerTransformAttributeRegularization(AttributeRegularizationLayer):
@@ -149,9 +136,11 @@ class AttributeRegularizedVAE(StandardVAE):
                  attribute_regularization_layer: AttributeRegularizationLayer,
                  mean_inference_layer: keras.Layer = None,
                  log_var_inference_layer: keras.Layer = None,
-                 free_bits: float = None,
-                 max_beta: float = None,
-                 beta_rate: float = None,
+                 max_beta: float = 1.0,
+                 beta_rate: float = 0.0,
+                 free_bits: float = 0.0,
+                 input_shape: tuple = (None, None),
+                 aux_input_shape: tuple = (None,),
                  name: str = "ar_vae",
                  **kwargs):
         super(AttributeRegularizedVAE, self).__init__(
@@ -160,10 +149,24 @@ class AttributeRegularizedVAE(StandardVAE):
             generative_layer=generative_layer,
             mean_inference_layer=mean_inference_layer,
             log_var_inference_layer=log_var_inference_layer,
-            z_processing_layer=attribute_regularization_layer,
             free_bits=free_bits,
             max_beta=max_beta,
             beta_rate=beta_rate,
+            input_shape=input_shape,
+            aux_input_shape=aux_input_shape,
             name=name,
             **kwargs
         )
+        self._regularization_layers.append(attribute_regularization_layer)
+        self._attr_reg_loss_tracker = keras.metrics.Mean(name=attribute_regularization_layer.regularization_name)
+
+    @property
+    def metrics(self):
+        return super().metrics + [self._attr_reg_loss_tracker]
+
+    def _add_regularization_losses(self, regularization_losses):
+        div_losses = regularization_losses[:3]
+        super()._add_regularization_losses(div_losses)
+        attr_reg_loss = regularization_losses[4]
+        self.add_loss(attr_reg_loss)
+        self._attr_reg_loss_tracker.update_state(attr_reg_loss)

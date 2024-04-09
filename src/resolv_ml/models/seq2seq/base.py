@@ -25,7 +25,8 @@ class SequenceEncoder(ABC, keras.Model):
         self._embedding_layer.build(input_shape)
 
     def call(self, inputs, training: bool = False, **kwargs):
-        inputs = keras.ops.squeeze(inputs, axis=-1)  # TODO - What about multi featured sequences
+        # TODO - What about multi featured sequences? Not working with graph execution
+        inputs = keras.ops.squeeze(inputs, axis=-1)
         embedded_seq = self._embedding_layer(inputs) if self._embedding_layer else inputs
         return self.encode(embedded_seq, training, **kwargs)
 
