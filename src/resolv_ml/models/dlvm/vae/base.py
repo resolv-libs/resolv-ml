@@ -55,15 +55,17 @@ class VAE(keras.Model, ABC):
     def call(self, inputs, training: bool = False, **kwargs):
         if training:
             vae_input, aux_input = inputs
-            self._iterations.assign(self.optimizer.iterations if training else 0)
+            self._iterations.assign(self.optimizer.iterations + 1)
             z, *posterior_dist_params = self._encoder((vae_input, aux_input), training=training)
             outputs = self._decoder((vae_input, aux_input, z), training=training)
+            regularization_losses = []
             if self._regularization_layers:
                 for regularization_layer in self._regularization_layers:
                     regularizer_inputs = vae_input, aux_input, posterior_dist_params, z, outputs
-                    regularization_losses = regularization_layer(regularizer_inputs, training=training,
-                                                                 iterations=self._iterations)
-                    self._add_regularization_losses(regularization_losses)
+                    layer_reg_losses = regularization_layer(regularizer_inputs, training=training,
+                                                            iterations=self._iterations)
+                    regularization_losses.append(layer_reg_losses)
+                self._add_regularization_losses(regularization_losses)
         else:
             z = inputs
             vae_input = keras.ops.convert_to_tensor([0])

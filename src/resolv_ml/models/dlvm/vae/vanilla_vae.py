@@ -58,7 +58,7 @@ class StandardVAE(VAE):
         super().build(input_shape)
 
     def _add_regularization_losses(self, regularization_losses):
-        div_loss, div_loss_bits, div_beta = regularization_losses
+        div_loss, div_loss_bits, div_beta = regularization_losses[0]
         self.add_loss(div_loss)
         self.div_loss_tracker.update_state(div_loss)
         self.div_bits_tracker.update_state(div_loss_bits)

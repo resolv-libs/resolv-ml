@@ -1,6 +1,6 @@
 # TODO - DOC
 import copy
-from typing import List, Tuple, Any
+from typing import List, Any
 
 import keras
 import keras.ops as k_ops
