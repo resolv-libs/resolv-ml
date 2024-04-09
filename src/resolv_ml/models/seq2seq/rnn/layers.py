@@ -242,7 +242,7 @@ class StackedBidirectionalRNN(keras.Layer):
 
     @classmethod
     def _compute_layer_output_shape(cls, layer, input_shape, initial_state_shape=None):
-        # TODO - Is this a Keras bug?
+        # TODO - Bidirectional output shape - Is this a Keras bug?
         # return self._layers[-1].compute_output_shape(input_shape)
         output_shape = layer.forward_layer.compute_output_shape(input_shape, initial_state_shape)
         if layer.return_state:
