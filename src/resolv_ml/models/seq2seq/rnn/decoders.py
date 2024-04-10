@@ -14,15 +14,17 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
 
     def __init__(self,
                  dec_rnn_sizes: List[int],
+                 num_classes: int,
                  rnn_cell: Any = None,
                  output_projection_layer: keras.Layer = None,
                  embedding_layer: keras.layers.Embedding = None,
-                 logits_sampling_mode: str = "argmax",
+                 sampling_mode: str = "argmax",
                  name: str = "rnn_decoder",
                  **kwargs):
         super(RNNAutoregressiveDecoder, self).__init__(
+            num_classes=num_classes,
             embedding_layer=embedding_layer,
-            logits_sampling_mode=logits_sampling_mode,
+            sampling_mode=sampling_mode,
             name=name,
             **kwargs
         )
@@ -43,54 +45,56 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
         input_sequence_shape, _, z_shape = input_shape
         super().build(input_sequence_shape)
         batch_size, sequence_length, features_length = input_sequence_shape
-        self._output_projection = self._output_projection if self._output_projection else (
-            keras.layers.Dense(
-                units=self._embedding_layer.input_dim if self._embedding_layer else features_length,
-                activation="relu",
+        if self._output_projection:
+            projection_layer_out_shape = self._output_projection.compute_output_shape(input_shape)
+            if projection_layer_out_shape != (batch_size, 1, self._num_classes):
+                raise ValueError(f"Given projection layer output shape {projection_layer_out_shape} is not compatible "
+                                 f"with the decoder. Output shape must be (batch_size, 1, {self._num_classes}).")
+        else:
+            self._output_projection = keras.layers.Dense(
+                units=self._num_classes,
+                activation="linear",
                 use_bias=True,
                 kernel_initializer="glorot_uniform",
                 bias_initializer="zeros",
                 name="output_projection"
             )
-        )
         rnn_input_shape = batch_size, 1, (self._get_decoder_input_size(input_sequence_shape) + z_shape[1])
         self._stacked_rnn_cells.build(input_shape=rnn_input_shape)
         self._initial_state_layer.build(input_shape=z_shape)
         self._output_projection.build(input_shape=self._stacked_rnn_cells.compute_output_shape(rnn_input_shape)[0])
 
     def decode(self, input_sequence, aux_inputs, z, teacher_force_probability, training: bool = False, **kwargs):
-        batch_size, sequence_length, features_length = input_sequence.shape if training else (1, 1, 1)   # TODO - ???
+        # TODO - Inference mode
+        batch_size, sequence_length, features_length = input_sequence.shape if training else (1, 1, 1)
         initial_state = self._initial_state_layer(z, training=training)
-        # Expand embedding dims to allow for concatenation with the decoder input
         z = k_ops.expand_dims(z, axis=1)
-        decoder_input = k_ops.zeros(shape=(batch_size, 1, self._get_decoder_input_size(input_sequence.shape)))
-        output_seq_logits = []
+        decoder_input = k_ops.zeros(shape=(batch_size, self._get_decoder_input_size(input_sequence.shape)))
+        output_sequence_probabilities = []
         for i in range(sequence_length):
+            decoder_input = k_ops.expand_dims(decoder_input, axis=1)
             decoder_input = k_ops.concatenate([decoder_input, z], axis=-1)
             dec_emb_output, *initial_state = self._stacked_rnn_cells(decoder_input,
                                                                      initial_state=initial_state,
                                                                      training=training)
-            output_logit = self._output_projection(dec_emb_output, training=training)
-
-            if random.random() < teacher_force_probability:
-                embedding = input_sequence[:, i, :]
+            output_logits = self._output_projection(dec_emb_output, training=training)
+            token_probabilities = keras.ops.softmax(output_logits)
+            output_sequence_probabilities.append(token_probabilities)
+            # Compute token for auto-regression
+            # TODO - In order to compute the sparse categorical loss I need to return the probabilities for each token
+            #  of the sequence, should I use argmax token anyway as autoregression input
+            if self._sampling_mode == "argmax":
+                predicted_token = keras.ops.argmax(token_probabilities, axis=-1)
             else:
-                embedding = output_logit
-
-            if self._embedding_layer:
-                output_category = k_ops.argmax(output_logit, axis=-1)  # TODO - add support for other sampling modes
-                embedding = self._embedding_layer(output_category)
-
-            # Expand embedding dims to allow for concatenation with the decoder input
-            decoder_input = k_ops.expand_dims(embedding, axis=1)
-            output_seq_logits.append(output_logit)
-        output_seq_logits = k_ops.stack(output_seq_logits, axis=1)
-        return output_seq_logits
+                predicted_token = keras.ops.argmax(token_probabilities, axis=-1)
+            ar_token = input_sequence[:, i, :] if random.random() < teacher_force_probability else predicted_token
+            decoder_input = self._embedding_layer(ar_token)
+        output_sequence_probabilities = k_ops.stack(output_sequence_probabilities, axis=1)
+        return output_sequence_probabilities
 
     def compute_output_shape(self, input_shape):
-        # TODO - check again when fixed
         input_sequence_shape = input_shape[0]
-        return input_sequence_shape[0], input_sequence_shape[1], self._embedding_layer.input_dim
+        return input_sequence_shape[0], input_sequence_shape[1], self._num_classes
 
     def get_config(self):
         base_config = super().get_config()
@@ -109,8 +113,10 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
         return cls(stacked_rnn_cells, initial_state_layer, output_projection, **config)
 
     def _get_decoder_input_size(self, input_sequence_shape):
-        _, _, features_length = input_sequence_shape
-        return self._embedding_layer.output_dim if self._embedding_layer else features_length
+        if self._embedding_layer:
+            return self._embedding_layer.compute_output_shape(input_sequence_shape)[-1]
+        else:
+            return input_sequence_shape[-1]
 
 
 class HierarchicalRNNDecoder(SequenceDecoder):

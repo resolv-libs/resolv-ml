@@ -52,11 +52,13 @@ class Seq2SeqVAETest(unittest.TestCase):
             input_shape=(self.sequence_length, self.sequence_features),
             z_size=128,
             input_processing_layer=BidirectionalRNNEncoder(
+                num_classes=self.num_notes,
                 enc_rnn_sizes=[16, 16],
                 embedding_layer=keras.layers.Embedding(input_dim=self.num_notes, output_dim=self.embedding_size,
                                                        name="encoder_embedding"),
             ),
             generative_layer=RNNAutoregressiveDecoder(
+                num_classes=self.num_notes,
                 dec_rnn_sizes=[16, 16],
                 embedding_layer=keras.layers.Embedding(input_dim=self.num_notes, output_dim=self.embedding_size,
                                                        name="decoder_embedding"),
@@ -90,7 +92,7 @@ class Seq2SeqVAETest(unittest.TestCase):
         vae_model = self.get_model()
         vae_model.build(input_shape)
         vae_model.summary(expand_nested=True)
-        vae_model.plot(self.output_dir/"seq2seq.png")
+        vae_model.plot(self.output_dir / "seq2seq.png")
         self.assertTrue(vae_model)
 
     def test_seq2seq_vae_training(self):
@@ -100,7 +102,7 @@ class Seq2SeqVAETest(unittest.TestCase):
         dataset = self.load_dataset()
         vae_model.compile(
             optimizer=keras.optimizers.Adam(learning_rate=0.001),
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            loss=keras.losses.SparseCategoricalCrossentropy(),
             run_eagerly=True
         )
         vae_model.fit(dataset, batch_size=32, epochs=1)

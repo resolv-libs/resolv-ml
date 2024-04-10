@@ -10,10 +10,12 @@ from .helpers import training as training_helper
 class SequenceEncoder(ABC, keras.Model):
 
     def __init__(self,
-                 embedding_layer: keras.layers.Embedding = None,
+                 num_classes: int,
+                 embedding_layer: keras.Layer = None,
                  name: str = "seq_encoder",
                  **kwargs):
         super(SequenceEncoder, self).__init__(name=name, **kwargs)
+        self.num_classes = num_classes
         self._embedding_layer = embedding_layer
 
     @abstractmethod
@@ -22,12 +24,21 @@ class SequenceEncoder(ABC, keras.Model):
 
     def build(self, input_shape):
         super().build(input_shape)
-        self._embedding_layer.build(input_shape)
+        if self._embedding_layer:
+            if isinstance(self._embedding_layer, keras.layers.Embedding):
+                # Note: when using an embedding layer can't run the graph while using Tensorflow backend
+                if len(input_shape) > 2 and input_shape[-1] > 1:
+                    raise ValueError(f"An embedding layer can be used only for sequences with one feature. "
+                                     f"The input sequence has {input_shape[-1]} features. Use a Dense layer instead.")
+                input_shape = input_shape[:2]
+            self._embedding_layer.build(input_shape)
 
     def call(self, inputs, training: bool = False, **kwargs):
-        # TODO - What about multi featured sequences? Not working with graph execution
-        inputs = keras.ops.squeeze(inputs, axis=-1)
-        embedded_seq = self._embedding_layer(inputs) if self._embedding_layer else inputs
+        embedded_seq = inputs
+        if self._embedding_layer:
+            if isinstance(self._embedding_layer, keras.layers.Embedding):
+                inputs = keras.ops.squeeze(inputs, axis=-1)
+            embedded_seq = self._embedding_layer(inputs)
         return self.encode(embedded_seq, training, **kwargs)
 
     def get_config(self):
@@ -47,15 +58,17 @@ class SequenceEncoder(ABC, keras.Model):
 class SequenceDecoder(ABC, keras.Model):
 
     def __init__(self,
-                 embedding_layer: keras.layers.Embedding = None,
-                 logits_sampling_mode: str = "argmax",
+                 num_classes: int,
+                 embedding_layer: keras.Layer = None,
+                 sampling_mode: str = "argmax",
                  sampling_schedule: str = "constant",
                  sampling_rate: float = 0.0,
                  name: str = "seq_decoder",
                  **kwargs):
         super(SequenceDecoder, self).__init__(name=name, **kwargs)
+        self._num_classes = num_classes
         self._embedding_layer = embedding_layer
-        self._logits_sampling_mode = logits_sampling_mode
+        self._sampling_mode = sampling_mode
         self._sampling_schedule = sampling_schedule
         self._sampling_rate = sampling_rate
 
@@ -81,7 +94,7 @@ class SequenceDecoder(ABC, keras.Model):
         base_config = super().get_config()
         config = {
             "embedding_layer": keras.saving.serialize_keras_object(self._embedding_layer),
-            "logits_sampling_mode": self._logits_sampling_mode,
+            "sampling_mode": self._sampling_mode,
             "sampling_schedule": self._sampling_schedule,
             "sampling_rate": self._sampling_rate
         }

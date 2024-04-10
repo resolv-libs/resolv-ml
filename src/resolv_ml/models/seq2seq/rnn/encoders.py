@@ -13,7 +13,7 @@ class RNNEncoder(SequenceEncoder):
     def __init__(self,
                  enc_rnn_sizes: List[int],
                  rnn_cell: Any = None,
-                 embedding_layer: keras.layers.Embedding = None,
+                 embedding_layer: keras.Layer = None,
                  dropout: float = 0.0,
                  name: str = "rnn_encoder",
                  **kwargs):
@@ -64,7 +64,7 @@ class BidirectionalRNNEncoder(SequenceEncoder):
     def __init__(self,
                  enc_rnn_sizes: List[int],
                  rnn_cell: Any = None,
-                 embedding_layer: keras.layers.Embedding = None,
+                 embedding_layer: keras.Layer = None,
                  dropout: float = 0.0,
                  name="bidirectional_rnn_encoder",
                  **kwargs):
@@ -79,7 +79,6 @@ class BidirectionalRNNEncoder(SequenceEncoder):
         )
 
     def build(self, input_shape):
-        input_shape = (input_shape[0], input_shape[1])  # TODO - What about multi featured sequences
         super().build(input_shape)
         embedding_output_shape = self._embedding_layer.compute_output_shape(input_shape)
         self._stacked_bidirectional_rnn_layers.build(embedding_output_shape)

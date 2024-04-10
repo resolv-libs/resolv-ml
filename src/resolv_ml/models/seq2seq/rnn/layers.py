@@ -4,6 +4,7 @@ from typing import List, Any
 
 import keras
 import keras.ops as k_ops
+import numpy as np
 from keras.src.layers.rnn.dropout_rnn_cell import DropoutRNNCell
 
 
@@ -49,7 +50,7 @@ class InitialRNNCellStateFromEmbedding(keras.Layer):
 
     def call(self, inputs, training: bool = False, *args, **kwargs):
         initial_cell_states = self._initial_cell_states(inputs, training=training)
-        split_indexes = k_ops.cumsum(self._get_flatten_state_sizes()).numpy()[:-1]
+        split_indexes = np.cumsum(self._get_flatten_state_sizes())[:-1]
         split_states = k_ops.split(initial_cell_states, indices_or_sections=split_indexes, axis=-1)
         packed_states = [[split_states[i], split_states[i + 1]] for i in range(0, len(split_states), 2)]
         return packed_states
@@ -71,7 +72,7 @@ class InitialRNNCellStateFromEmbedding(keras.Layer):
         return cls(stacked_rnn_cells, **config)
 
     def _get_flatten_state_sizes(self):
-        return k_ops.ravel(self._cell_state_size).numpy()
+        return np.ravel(self._cell_state_size)
 
 
 @keras.saving.register_keras_serializable(package="RNNLayers", name="StackedRNN")

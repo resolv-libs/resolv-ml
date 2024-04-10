@@ -30,7 +30,7 @@ class VAE(keras.Model, ABC):
         # Build encoder model
         vae_input = keras.Input(shape=input_shape, name="input")
         aux_input = keras.Input(shape=aux_input_shape, name="aux_input")
-        input_processing_layer_out = input_processing_layer(vae_input)
+        input_processing_layer_out = input_processing_layer(vae_input)  # frontend
         inference_layer_out = inference_layer(input_processing_layer_out)
         z = sampling_layer((inference_layer_out, aux_input))
         self._encoder = keras.Model(inputs=(vae_input, aux_input), outputs=(z, *inference_layer_out), name="encoder")
