@@ -84,54 +84,78 @@ class StackedRNN(keras.Layer):
                  dropout: float = 0.0,
                  return_sequences: bool = False,
                  return_state: bool = True,
-                 go_backwards: bool = False,
-                 stateful: bool = False,
-                 unroll: bool = False,
-                 zero_output_for_mask: bool = False,
                  name="stacked_rnn", **kwargs):
         super(StackedRNN, self).__init__(name=name, **kwargs)
-        self._stacked_rnn_cells = keras.layers.RNN(
-            cell=rnn_cell if rnn_cell else [get_default_rnn_cell(rnn_size, dropout) for rnn_size in layers_sizes],
-            return_sequences=return_sequences,
-            return_state=return_state,
-            go_backwards=go_backwards,
-            stateful=stateful,
-            unroll=unroll,
-            zero_output_for_mask=zero_output_for_mask,
-            name="stacked_rnn_cells"
-        )
+        if not layers_sizes:
+            raise ValueError("No layers provided. Please provide a list containing the layers sizes.")
+        self._return_sequences = return_sequences
+        self._return_state = return_state
+        self._layers: List[keras.layers.RNN] = []
+        for i, layer_size in enumerate(layers_sizes):
+            is_output_layer = (i == len(layers_sizes) - 1)
+            is_return_sequences_layer = return_sequences if is_output_layer else True
+            self._layers.append(keras.layers.RNN(
+                rnn_cell if rnn_cell else get_default_rnn_cell(layer_size, dropout),
+                return_sequences=is_return_sequences_layer,
+                return_state=True,
+                go_backwards=False,
+                stateful=False,
+                unroll=False,
+                zero_output_for_mask=False
+            ))
 
     @property
     def state_size(self):
-        return self._stacked_rnn_cells.state_size
+        return [self._layers[0].state_size, self._layers[0].state_size]
 
     def build(self, input_shape):
         super().build(input_shape)
-        self._stacked_rnn_cells.build(input_shape)
+        for i, layer in enumerate(self._layers):
+            layer.build(input_shape)
+            output_shape = layer.compute_output_shape(input_shape)
+            input_shape, _ = output_shape[0], output_shape[1:]
 
     def call(self, inputs, training: bool = False, **kwargs) -> Any:
-        return self._stacked_rnn_cells(inputs,
-                                       initial_state=kwargs.get("initial_state"),
-                                       mask=kwargs.get("mask"),
-                                       training=training)
+        initial_states = kwargs.get("initial_states")
+        if initial_states and (not isinstance(initial_states, list) or len(initial_states) != len(self._layers)):
+            raise ValueError("initial_states must be a list of state tensors (one per layer).")
+        hidden_states = []
+        cell_states = []
+        prev_output = inputs
+        for layer_idx, layer in enumerate(self._layers):
+            initial_state = initial_states[layer_idx] if initial_states else None
+            prev_output, state_h, state_c = layer(prev_output, initial_state=initial_state,
+                                                  mask=kwargs.get("mask"), training=training)
+            hidden_states.append(state_h)
+            cell_states.append(state_c)
+        return (prev_output, hidden_states[-1], cell_states[-1]) if self._return_state else prev_output
 
-    def compute_output_shape(self, input_shape):
-        return self._stacked_rnn_cells.compute_output_shape(input_shape)
+    def compute_output_shape(self, input_shape, initial_state_shape=None):
+        output_shape = input_shape
+        state_shape = None
+        for i, layer in enumerate(self._layers):
+            output_shape = layer.compute_output_shape(output_shape, initial_state_shape)
+            output_shape, state_shape = output_shape[0], output_shape[1:]
+        if self._return_state:
+            return (output_shape,) + state_shape
+        return output_shape
 
     def get_initial_state(self, batch_size):
-        return self._stacked_rnn_cells.get_initial_state(batch_size)
+        return self._layers[0].get_initial_state(batch_size)
 
     def get_config(self):
         base_config = super().get_config()
         config = {
-            "stacked_rnn_cells": keras.saving.serialize_keras_object(self._stacked_rnn_cells),
+            "return_sequences": self._return_sequences,
+            "return_state": self._return_state,
+            "layers": [keras.saving.serialize_keras_object(layer) for layer in self._layers],
         }
         return {**base_config, **config}
 
     @classmethod
     def from_config(cls, config):
-        stacked_rnn_cells = keras.saving.deserialize_keras_object(config.pop("stacked_rnn_cells"))
-        return cls(stacked_rnn_cells, **config)
+        layers = [keras.layers.deserialize(layer) for layer in config.pop("layers")]
+        return cls(layers, **config)
 
 
 @keras.saving.register_keras_serializable(package="RNNLayers", name="StackedBidirectionalRNN")
@@ -200,13 +224,10 @@ class StackedBidirectionalRNN(keras.Layer):
                 initial_state = None
             else:
                 initial_state = k_ops.concatenate([initial_states_fw[layer_idx], initial_states_bw[layer_idx]])
-            output, fw_h, fw_c, bw_h, bw_c = self._layers[layer_idx](prev_output,
-                                                                     initial_state=initial_state,
-                                                                     mask=kwargs.get("mask"),
-                                                                     training=training)
+            prev_output, fw_h, fw_c, bw_h, bw_c = layer(prev_output, initial_state=initial_state,
+                                                        mask=kwargs.get("mask"), training=training)
             state_h = k_ops.concatenate([fw_h, bw_h], axis=-1)
             state_c = k_ops.concatenate([fw_c, bw_c], axis=-1)
-            prev_output = output
             hidden_states.append(state_h)
             cell_states.append(state_c)
         return (prev_output, hidden_states[-1], cell_states[-1]) if self._return_state else prev_output

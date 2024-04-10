@@ -17,8 +17,6 @@ class StandardVAE(VAE):
                  max_beta: float = 1.0,
                  beta_rate: float = 0.0,
                  free_bits: float = 0.0,
-                 input_shape: tuple = (None, None),
-                 aux_input_shape: tuple = (None,),
                  name: str = "standard_vae",
                  **kwargs):
         super(StandardVAE, self).__init__(
@@ -37,8 +35,6 @@ class StandardVAE(VAE):
                 beta_rate=beta_rate,
                 free_bits=free_bits
             )],
-            input_shape=input_shape,
-            aux_input_shape=aux_input_shape,
             name=name,
             **kwargs
         )

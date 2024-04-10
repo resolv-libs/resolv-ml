@@ -29,7 +29,7 @@ class BetaDivergenceRegularizer(keras.Layer):
         free_nats = self._free_bits * k_ops.log(2.0)
         div_cost = k_ops.maximum(div - free_nats, 0)
         # Compute beta for beta-VAE
-        div_beta = (1.0 - k_ops.power(self._beta_rate, kwargs.get("iterations", 0))) * self._max_beta
+        div_beta = (1.0 - k_ops.power(self._beta_rate, kwargs.get("iterations", 1))) * self._max_beta
         # Compute KL across the batch and update trackers
         div_loss = div_beta * k_ops.mean(div_cost)
         div_loss_bits = div_loss / k_ops.log(2.0)
