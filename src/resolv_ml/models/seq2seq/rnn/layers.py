@@ -110,7 +110,9 @@ class StackedRNN(keras.Layer):
         self._stacked_rnn_cells.build(input_shape)
 
     def call(self, inputs, training: bool = False, **kwargs) -> Any:
-        return self._stacked_rnn_cells(inputs, initial_state=kwargs.get("initial_state"), mask=kwargs.get("mask"),
+        return self._stacked_rnn_cells(inputs,
+                                       initial_state=kwargs.get("initial_state"),
+                                       mask=kwargs.get("mask"),
                                        training=training)
 
     def compute_output_shape(self, input_shape):
@@ -183,11 +185,9 @@ class StackedBidirectionalRNN(keras.Layer):
     def call(self, inputs, training: bool = False, **kwargs):
         initial_states_fw = kwargs.get("initial_states_fw")
         initial_states_bw = kwargs.get("initial_states_bw")
-
         if (initial_states_fw and
                 (not isinstance(initial_states_fw, list) or len(initial_states_fw) != len(self._layers))):
             raise ValueError("initial_states_fw must be a list of state tensors (one per layer).")
-
         if (initial_states_bw and
                 (not isinstance(initial_states_bw, list) or len(initial_states_bw) != len(self._layers))):
             raise ValueError("initial_states_bw must be a list of state tensors (one per layer).")
@@ -200,14 +200,15 @@ class StackedBidirectionalRNN(keras.Layer):
                 initial_state = None
             else:
                 initial_state = k_ops.concatenate([initial_states_fw[layer_idx], initial_states_bw[layer_idx]])
-            output, fw_h, fw_c, bw_h, bw_c = self._layers[layer_idx](prev_output, initial_state=initial_state,
-                                                                     training=training, mask=kwargs.get("mask"))
+            output, fw_h, fw_c, bw_h, bw_c = self._layers[layer_idx](prev_output,
+                                                                     initial_state=initial_state,
+                                                                     mask=kwargs.get("mask"),
+                                                                     training=training)
             state_h = k_ops.concatenate([fw_h, bw_h], axis=-1)
             state_c = k_ops.concatenate([fw_c, bw_c], axis=-1)
             prev_output = output
             hidden_states.append(state_h)
             cell_states.append(state_c)
-
         return (prev_output, hidden_states[-1], cell_states[-1]) if self._return_state else prev_output
 
     def compute_output_shape(self, input_shape, initial_state_shape=None):
