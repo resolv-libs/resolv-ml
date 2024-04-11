@@ -6,8 +6,8 @@ import keras
 from .helpers import training as training_helper
 
 
-@keras.saving.register_keras_serializable(package="Seq2SeqBase", name="SequenceEncoder")
-class SequenceEncoder(ABC, keras.Model):
+@keras.saving.register_keras_serializable(package="SequenceEncoders", name="SequenceEncoder")
+class SequenceEncoder(keras.Model):
 
     def __init__(self,
                  embedding_layer: keras.Layer = None,
@@ -16,9 +16,8 @@ class SequenceEncoder(ABC, keras.Model):
         super(SequenceEncoder, self).__init__(name=name, **kwargs)
         self._embedding_layer = embedding_layer
 
-    @abstractmethod
     def encode(self, inputs, training: bool = False, **kwargs):
-        pass
+        raise NotImplementedError("SequenceEncoder.encode must be overridden by subclasses.")
 
     def build(self, input_shape):
         super().build(input_shape)
@@ -44,7 +43,7 @@ class SequenceEncoder(ABC, keras.Model):
     @classmethod
     def from_config(cls, config, custom_objects=None):
         embedding_layer = keras.layers.deserialize(config.pop("embedding_layer"))
-        return cls(embedding_layer, **config)
+        return cls(embedding_layer=embedding_layer, **config)
 
     def _check_embedding_layer_input_shape(self, input_shape):
         if isinstance(self._embedding_layer, keras.layers.Embedding):
@@ -56,7 +55,6 @@ class SequenceEncoder(ABC, keras.Model):
         return input_shape
 
 
-@keras.saving.register_keras_serializable(package="Seq2SeqBase", name="SequenceDecoder")
 class SequenceDecoder(ABC, keras.Model):
 
     def __init__(self,

@@ -65,19 +65,6 @@ class InitialRNNCellStateFromEmbedding(keras.Layer):
         out_shape = tuple((batch_size, size) for size in self._get_flatten_state_sizes())
         return out_shape
 
-    def get_config(self):
-        base_config = super().get_config()
-        config = {
-            "cell_state_sizes": self._cell_state_sizes,
-            "initial_cell_states": keras.layers.serialize(self._initial_cell_states),
-        }
-        return {**base_config, **config}
-
-    @classmethod
-    def from_config(cls, config):
-        cls._initial_cell_states = keras.layers.deserialize(config.pop("initial_cell_states"))
-        return cls(**config)
-
     def _get_flatten_state_sizes(self):
         return [x for y in self._cell_state_sizes for x in y]
 
@@ -111,8 +98,11 @@ class StackedBidirectionalRNN(keras.Layer):
             merge_modes = ["concat" for _ in range(len(layers_sizes) - 1)] + [None]
 
         self._layers_sizes = layers_sizes
+        self._rnn_cell = rnn_cell
+        self._merge_modes = merge_modes
         self._return_sequences = return_sequences
         self._return_state = return_state
+        self._dropout = dropout
         self._layers: List[keras.layers.Bidirectional] = []
         for i, layer_size in enumerate(layers_sizes):
             is_output_layer = (i == len(layers_sizes) - 1)
@@ -198,13 +188,15 @@ class StackedBidirectionalRNN(keras.Layer):
         base_config = super().get_config()
         config = {
             "layers_sizes": self._layers_sizes,
+            "rnn_cell": keras.saving.serialize_keras_object(self._rnn_cell),
+            "merge_modes": self._merge_modes,
             "return_sequences": self._return_sequences,
             "return_state": self._return_state,
-            "layers": [keras.saving.serialize_keras_object(layer) for layer in self._layers]
+            "dropout": self._dropout
         }
         return {**base_config, **config}
 
     @classmethod
-    def from_config(cls, config):
-        cls._layers = [keras.layers.deserialize(layer) for layer in config.pop("layers")]
-        return cls(**config)
+    def from_config(cls, config, custom_objects=None):
+        rnn_cell = keras.saving.deserialize_keras_object(config.pop("rnn_cell"))
+        return cls(rnn_cell=rnn_cell, **config)

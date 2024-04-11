@@ -19,6 +19,8 @@ class RNNEncoder(SequenceEncoder):
                  **kwargs):
         super(RNNEncoder, self).__init__(embedding_layer=embedding_layer, name=name, **kwargs)
         self._enc_rnn_sizes = enc_rnn_sizes
+        self._rnn_cell = rnn_cell
+        self._dropout = dropout
         self._stacked_rnn_cells = keras.layers.RNN(
             cell=rnn_cell if rnn_cell else [rnn_layers.get_default_rnn_cell(size, dropout, name=f"lstm_cell_{i}")
                                             for i, size in enumerate(enc_rnn_sizes)],
@@ -55,14 +57,15 @@ class RNNEncoder(SequenceEncoder):
         base_config = super().get_config()
         config = {
             "enc_rnn_sizes": self._enc_rnn_sizes,
-            "stacked_rnn_cells": keras.saving.serialize_keras_object(self._stacked_rnn_cells),
+            "rnn_cell": keras.saving.serialize_keras_object(self._rnn_cell),
+            "dropout": self._dropout,
         }
         return {**base_config, **config}
 
     @classmethod
     def from_config(cls, config, custom_objects=None):
-        cls._stacked_rnn_cells = keras.saving.deserialize_keras_object(config.pop("stacked_rnn_cells"))
-        return cls(**config)
+        rnn_cell = keras.saving.deserialize_keras_object(config.pop("rnn_cell"))
+        return cls(rnn_cell=rnn_cell, **config)
 
 
 @keras.saving.register_keras_serializable(package="SequenceEncoders", name="BidirectionalRNNEncoder")
@@ -76,6 +79,9 @@ class BidirectionalRNNEncoder(SequenceEncoder):
                  name="bidirectional_rnn_encoder",
                  **kwargs):
         super(BidirectionalRNNEncoder, self).__init__(embedding_layer=embedding_layer, name=name, **kwargs)
+        self._enc_rnn_sizes = enc_rnn_sizes
+        self._rnn_cell = rnn_cell
+        self._dropout = dropout
         self._stacked_bidirectional_rnn_layers = rnn_layers.StackedBidirectionalRNN(
             layers_sizes=enc_rnn_sizes,
             rnn_cell=rnn_cell,
@@ -92,12 +98,13 @@ class BidirectionalRNNEncoder(SequenceEncoder):
         self._stacked_bidirectional_rnn_layers.build(embedding_output_shape)
 
     def encode(self, inputs, training: bool = False, **kwargs):
-        _, hidden_state, _ = self._stacked_bidirectional_rnn_layers(inputs, training=training, **kwargs)
-        return hidden_state
+        _, fw_h, _, bw_h, _ = self._stacked_bidirectional_rnn_layers(inputs, training=training, **kwargs)
+        return keras.ops.concatenate([fw_h, bw_h], axis=-1)
 
     def compute_output_shape(self, input_shape):
-        rnn_output_shape = self._stacked_bidirectional_rnn_layers.compute_output_shape(input_shape)
-        return rnn_output_shape[0]
+        _, fw_h_shape, _, bw_h_shape, _ = self._stacked_bidirectional_rnn_layers.compute_output_shape(input_shape)
+        batch_size = fw_h_shape[0]
+        return batch_size, fw_h_shape[-1] + bw_h_shape[-1]
 
     def get_initial_state(self, batch_size):
         return self._stacked_bidirectional_rnn_layers.get_initial_state(batch_size)
@@ -105,15 +112,13 @@ class BidirectionalRNNEncoder(SequenceEncoder):
     def get_config(self):
         base_config = super().get_config()
         config = {
-            "stacked_bidirectional_rnn_layers": keras.saving.serialize_keras_object(
-                self._stacked_bidirectional_rnn_layers
-            )
+            "enc_rnn_sizes": self._enc_rnn_sizes,
+            "rnn_cell": keras.saving.serialize_keras_object(self._rnn_cell),
+            "dropout": self._dropout,
         }
         return {**base_config, **config}
 
     @classmethod
     def from_config(cls, config, custom_objects=None):
-        stacked_bidirectional_rnn_layers = keras.saving.deserialize_keras_object(
-            config.pop("stacked_bidirectional_rnn_layers")
-        )
-        return cls(stacked_bidirectional_rnn_layers, **config)
+        rnn_cell = keras.saving.deserialize_keras_object(config.pop("rnn_cell"))
+        return cls(rnn_cell=rnn_cell, **config)
