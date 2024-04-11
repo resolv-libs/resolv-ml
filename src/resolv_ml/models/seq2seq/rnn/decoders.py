@@ -44,10 +44,9 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
     def build(self, input_shape):
         input_sequence_shape, _, z_shape = input_shape
         super().build(input_sequence_shape)
-        batch_size, sequence_length, features_length = input_sequence_shape
         if self._output_projection:
             projection_layer_out_shape = self._output_projection.compute_output_shape(input_shape)
-            if projection_layer_out_shape != (batch_size, 1, self._num_classes):
+            if projection_layer_out_shape != (input_sequence_shape[0], 1, self._num_classes):
                 raise ValueError(f"Given projection layer output shape {projection_layer_out_shape} is not compatible "
                                  f"with the decoder. Output shape must be (batch_size, 1, {self._num_classes}).")
         else:
@@ -59,10 +58,6 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
                 bias_initializer="zeros",
                 name="output_projection"
             )
-        rnn_input_shape = batch_size, 1, (self._get_decoder_input_size(input_sequence_shape) + z_shape[1])
-        self._stacked_rnn_cells.build(rnn_input_shape)
-        self._initial_state_layer.build(z_shape)
-        self._output_projection.build((batch_size, self._stacked_rnn_cells.output_size))
 
     def decode(self, input_sequence, aux_inputs, z, teacher_force_probability, **kwargs):
         batch_size, sequence_length, features_length = input_sequence.shape
@@ -136,6 +131,7 @@ class HierarchicalRNNDecoder(SequenceDecoder):
                  core_decoder: SequenceDecoder,
                  dec_rnn_sizes: List[int],
                  num_classes: int,
+                 rnn_cell: Any = None,
                  dropout: float = 0.0,
                  sampling_schedule: str = "constant",
                  sampling_rate: float = 0.0,
@@ -152,15 +148,12 @@ class HierarchicalRNNDecoder(SequenceDecoder):
         self._num_levels = len(level_lengths) - 1  # subtract 1 for the core decoder level
         self._core_decoder = core_decoder
         self._hierarchical_initial_states: List[rnn_layers.InitialRNNCellStateFromEmbedding] = []
-        self._stacked_hierarchical_rnn_cells: List[rnn_layers.StackedRNN] = []
+        self._stacked_hierarchical_rnn_cells: List[keras.layers.RNN] = []
         for level_idx in range(self._num_levels):
-            level_rnn_cells = rnn_layers.StackedRNN(
-                layers_sizes=dec_rnn_sizes,
-                return_sequences=False,
-                return_state=True,
-                dropout=dropout,
-                name=f"level_{level_idx}_rnn"
-            )
+            level_rnn_cells = rnn_cell if rnn_cell else \
+                [rnn_layers.get_default_rnn_cell(size, dropout) for size in dec_rnn_sizes]
+            if len(dec_rnn_sizes) > 1 or (isinstance(rnn_cell, list) and len(rnn_cell) > 1):
+                level_rnn_cells = keras.layers.StackedRNNCells(level_rnn_cells)
             self._hierarchical_initial_states.append(
                 rnn_layers.InitialRNNCellStateFromEmbedding(
                     cell_state_size=level_rnn_cells.state_size,
@@ -178,13 +171,7 @@ class HierarchicalRNNDecoder(SequenceDecoder):
         if sequence_length != level_lengths_prod:
             raise ValueError(f"The product of the HierarchicalLSTMDecoder level lengths {level_lengths_prod} must "
                              f"equal the input sequence length {sequence_length}.")
-        # Build core decoder
         self._core_decoder.build(input_shape)
-        # Build hierarchical layers
-        rnn_input_shape = batch_size, 1, self._get_decoder_input_size(input_sequence_shape)
-        for level_idx in range(self._num_levels):
-            self._hierarchical_initial_states[level_idx].build(z_shape)
-            self._stacked_hierarchical_rnn_cells[level_idx].build(rnn_input_shape)
 
     def decode(self, input_sequence, aux_inputs, z, teacher_force_probability, **kwargs):
 
@@ -195,8 +182,7 @@ class HierarchicalRNNDecoder(SequenceDecoder):
                 input_sequence=base_input_sequence,
                 aux_inputs=aux_inputs,
                 z=embedding,
-                teacher_force_probability=teacher_force_probability,
-                training=True
+                teacher_force_probability=teacher_force_probability
             )
             output_sequence.append(decoded_sequence)
 
@@ -207,19 +193,18 @@ class HierarchicalRNNDecoder(SequenceDecoder):
             if level == self._num_levels:
                 return base_decode(embedding, path)
             initial_state = self._hierarchical_initial_states[level](embedding, training=True)
-            level_input = k_ops.zeros(shape=(batch_size, 1, self._get_decoder_input_size(input_sequence.shape)))
-            num_steps = self._level_lengths[level]
-            for idx in range(num_steps):
-                output, *initial_state = self._stacked_hierarchical_rnn_cells[level](level_input,
-                                                                                     initial_states=initial_state,
-                                                                                     training=True)
+            level_input = k_ops.zeros(shape=(batch_size, self._get_decoder_input_size(input_sequence.shape)))
+            for idx in range(self._level_lengths[level]):
+                output, initial_state = self._stacked_hierarchical_rnn_cells[level](level_input,
+                                                                                    states=initial_state,
+                                                                                    training=True)
                 recursive_decode(output, path + [idx])
 
         batch_size = input_sequence.shape[0]
         hierarchy_input_sequence = self._reshape_to_hierarchy(input_sequence)
         output_sequence = []
         recursive_decode(z)
-        return k_ops.stack(output_sequence, axis=1)
+        return k_ops.concatenate(output_sequence, axis=1)
 
     def sample(self, z, sampling_mode, **kwargs):
         pass

@@ -42,10 +42,6 @@ class InitialRNNCellStateFromEmbedding(keras.Layer):
             name="dense"
         )
 
-    def build(self, input_shape):
-        super().build(input_shape)
-        self._initial_cell_states.build(input_shape)
-
     def call(self, inputs, training: bool = False, *args, **kwargs):
         initial_cell_states = self._initial_cell_states(inputs, training=training)
         split_indexes = np.cumsum(self._get_flatten_state_sizes())[:-1]

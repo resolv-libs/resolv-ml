@@ -84,7 +84,8 @@ class SequenceDecoder(ABC, keras.Model):
 
     def build(self, input_shape):
         super().build(input_shape)
-        self._embedding_layer.build(input_shape)
+        if self._embedding_layer:
+            self._embedding_layer.build(input_shape)
 
     def call(self, inputs, training: bool = False, **kwargs):
         if training:

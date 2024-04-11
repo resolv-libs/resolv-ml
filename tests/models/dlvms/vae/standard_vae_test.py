@@ -86,7 +86,6 @@ class Seq2SeqVAETest(unittest.TestCase):
                 ),
                 num_classes=self.config["num_notes"],
                 dec_rnn_sizes=self.config["dec_rnn_sizes"],
-                embedding_layer=self.get_embedding_layer("decoder_embedding"),
                 dropout=self.config["dropout"]
             ),
             max_beta=self.config["max_beta"],
