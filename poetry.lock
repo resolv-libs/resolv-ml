@@ -911,10 +911,8 @@ version = "3.2.1"
 description = "Multi-backend Keras."
 optional = false
 python-versions = ">=3.9"
-files = [
-    {file = "keras-3.2.1-py3-none-any.whl", hash = "sha256:0be1e89b041e697be562d8422ecb958ee5481acfc089913200926c561d258a03"},
-    {file = "keras-3.2.1.tar.gz", hash = "sha256:966abbf0dfc1f9725f6293fb2a04ec83f56cd2a800990b38d1a03041255214a7"},
-]
+files = []
+develop = false
 
 [package.dependencies]
 absl-py = "*"
@@ -924,6 +922,12 @@ namex = "*"
 numpy = "*"
 optree = "*"
 rich = "*"
+
+[package.source]
+type = "git"
+url = "https://git@github.com/keras-team/keras.git"
+reference = "master"
+resolved_reference = "2fb6a2aca56029954894c507afc30cd95138d57b"
 
 [[package]]
 name = "kiwisolver"
@@ -2802,4 +2806,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.12"
-content-hash = "d235cfc7f1f689f17f89ffbab38e526319a5cf7596384f7f67e807ff28291229"
+content-hash = "7a72572c5b2cdaf3ce3784c9fec078c10638462e3893a9bd675365ee55f0ea85"

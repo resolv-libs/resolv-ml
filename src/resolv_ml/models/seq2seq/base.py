@@ -10,12 +10,10 @@ from .helpers import training as training_helper
 class SequenceEncoder(ABC, keras.Model):
 
     def __init__(self,
-                 num_classes: int,
                  embedding_layer: keras.Layer = None,
                  name: str = "seq_encoder",
                  **kwargs):
         super(SequenceEncoder, self).__init__(name=name, **kwargs)
-        self.num_classes = num_classes
         self._embedding_layer = embedding_layer
 
     @abstractmethod
@@ -62,14 +60,12 @@ class SequenceEncoder(ABC, keras.Model):
 class SequenceDecoder(ABC, keras.Model):
 
     def __init__(self,
-                 num_classes: int,
                  embedding_layer: keras.Layer = None,
                  sampling_schedule: str = "constant",
                  sampling_rate: float = 0.0,
                  name: str = "seq_decoder",
                  **kwargs):
         super(SequenceDecoder, self).__init__(name=name, **kwargs)
-        self._num_classes = num_classes
         self._embedding_layer = embedding_layer
         self._sampling_schedule = sampling_schedule
         self._sampling_rate = sampling_rate

@@ -18,8 +18,10 @@ class RNNEncoder(SequenceEncoder):
                  name: str = "rnn_encoder",
                  **kwargs):
         super(RNNEncoder, self).__init__(embedding_layer=embedding_layer, name=name, **kwargs)
+        self._enc_rnn_sizes = enc_rnn_sizes
         self._stacked_rnn_cells = keras.layers.RNN(
-            cell=rnn_cell if rnn_cell else [rnn_layers.get_default_rnn_cell(size, dropout) for size in enc_rnn_sizes],
+            cell=rnn_cell if rnn_cell else [rnn_layers.get_default_rnn_cell(size, dropout, name=f"lstm_cell_{i}")
+                                            for i, size in enumerate(enc_rnn_sizes)],
             return_sequences=False,
             return_state=True,
             name="stacked_rnn_cells"
@@ -42,10 +44,9 @@ class RNNEncoder(SequenceEncoder):
 
     def compute_output_shape(self, input_shape):
         rnn_output_shape = self._stacked_rnn_cells.compute_output_shape(input_shape)
-        hidden_state_shape = rnn_output_shape[1]
-        batch_size = hidden_state_shape[0]
-        last_layer_state_size = hidden_state_shape[1][-1]
-        return batch_size, last_layer_state_size
+        last_layer_states_shape = rnn_output_shape[-1]
+        last_layer_hidden_states_shape = last_layer_states_shape[0]
+        return last_layer_hidden_states_shape
 
     def get_initial_state(self, batch_size):
         return self._stacked_rnn_cells.get_initial_state(batch_size)
@@ -53,14 +54,15 @@ class RNNEncoder(SequenceEncoder):
     def get_config(self):
         base_config = super().get_config()
         config = {
+            "enc_rnn_sizes": self._enc_rnn_sizes,
             "stacked_rnn_cells": keras.saving.serialize_keras_object(self._stacked_rnn_cells),
         }
         return {**base_config, **config}
 
     @classmethod
     def from_config(cls, config, custom_objects=None):
-        stacked_rnn_cells = keras.saving.deserialize_keras_object(config.pop("stacked_rnn_cells"))
-        return cls(stacked_rnn_cells, **config)
+        cls._stacked_rnn_cells = keras.saving.deserialize_keras_object(config.pop("stacked_rnn_cells"))
+        return cls(**config)
 
 
 @keras.saving.register_keras_serializable(package="SequenceEncoders", name="BidirectionalRNNEncoder")

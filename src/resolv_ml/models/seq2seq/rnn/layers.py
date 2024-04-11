@@ -61,7 +61,9 @@ class InitialRNNCellStateFromEmbedding(keras.Layer):
         return packed_states
 
     def compute_output_shape(self, input_shape):
-        return self._cell_state_sizes
+        batch_size = input_shape[0]
+        out_shape = tuple((batch_size, size) for size in self._get_flatten_state_sizes())
+        return out_shape
 
     def get_config(self):
         base_config = super().get_config()
@@ -77,7 +79,7 @@ class InitialRNNCellStateFromEmbedding(keras.Layer):
         return cls(**config)
 
     def _get_flatten_state_sizes(self):
-        return np.ravel(self._cell_state_sizes)
+        return [x for y in self._cell_state_sizes for x in y]
 
 
 @keras.saving.register_keras_serializable(package="RNNLayers", name="StackedBidirectionalRNN")
@@ -154,26 +156,13 @@ class StackedBidirectionalRNN(keras.Layer):
         prev_output = inputs
         last_merge_mode = None
         for idx, layer in enumerate(self._layers):
-            prev_output, fw_h, fw_c, bw_h, bw_c = layer(prev_output, initial_state=initial_state,
-                                                        mask=kwargs.get("mask"), training=training)
-            if layer.merge_mode == "concat":
-                state_h = k_ops.concatenate([fw_h, bw_h], axis=-1)
-                state_c = k_ops.concatenate([fw_c, bw_c], axis=-1)
-            elif layer.merge_mode == "sum":
-                state_h = fw_h + bw_h
-                state_c = fw_c + bw_c
-            elif layer.merge_mode == "mul":
-                state_h = fw_h * bw_h
-                state_c = fw_c * bw_c
-            elif layer.merge_mode == "ave":
-                state_h = k_ops.average([fw_h, bw_h])
-                state_c = k_ops.average([fw_c, bw_c])
+            layer_outputs = layer(prev_output, initial_state=initial_state, mask=kwargs.get("mask"), training=training)
+            if layer.merge_mode:
+                prev_output, fw_h, fw_c, bw_h, bw_c = layer_outputs
             else:
-                state_h = [fw_h, bw_h]
-                state_c = [fw_c, bw_c]
-            layers_states += [[state_h, state_c]]
+                *prev_output, fw_h, fw_c, bw_h, bw_c = layer_outputs
+            layers_states += [[fw_h, fw_c, bw_h, bw_c]]
             last_merge_mode = layer.merge_mode
-
         if last_merge_mode:
             prev_output = [prev_output]
         # TODO - add support for returning the states of all the layers when return_state=True.

@@ -14,7 +14,6 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
 
     def __init__(self,
                  dec_rnn_sizes: List[int],
-                 num_classes: int,
                  rnn_cell: Any = None,
                  output_projection_layer: keras.Layer = None,
                  embedding_layer: keras.layers.Embedding = None,
@@ -24,7 +23,6 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
                  name: str = "rnn_decoder",
                  **kwargs):
         super(RNNAutoregressiveDecoder, self).__init__(
-            num_classes=num_classes,
             embedding_layer=embedding_layer,
             sampling_schedule=sampling_schedule,
             sampling_rate=sampling_rate,
@@ -130,7 +128,6 @@ class HierarchicalRNNDecoder(SequenceDecoder):
                  level_lengths: List[int],
                  core_decoder: SequenceDecoder,
                  dec_rnn_sizes: List[int],
-                 num_classes: int,
                  rnn_cell: Any = None,
                  dropout: float = 0.0,
                  sampling_schedule: str = "constant",
@@ -138,7 +135,6 @@ class HierarchicalRNNDecoder(SequenceDecoder):
                  name="hierarchical_decoder",
                  **kwargs):
         super(HierarchicalRNNDecoder, self).__init__(
-            num_classes=num_classes,
             sampling_schedule=sampling_schedule,
             sampling_rate=sampling_rate,
             name=name,
