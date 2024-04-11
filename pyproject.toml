@@ -35,12 +35,13 @@ include = ["CHANGELOG.md"]
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.12"
-keras = ">=3"
+keras = ">=3.2.1"
 
 [tool.poetry.group.dev.dependencies]
 
 [tool.poetry.group.test.dependencies]
 matplotlib = "*"
+deepdiff = "*"
 resolv-pipelines = {git = "ssh://git@github.com/resolv-libs/resolv-pipelines.git", rev = "main"}
 
 [tool.poetry.group.docs.dependencies]

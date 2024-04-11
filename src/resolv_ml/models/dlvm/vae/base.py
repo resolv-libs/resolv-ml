@@ -5,6 +5,7 @@ from typing import List
 import keras
 
 
+@keras.saving.register_keras_serializable(package="VAE", name="VAE")
 class VAE(keras.Model, ABC):
 
     def __init__(self,
@@ -25,7 +26,7 @@ class VAE(keras.Model, ABC):
         self._sampling_layer = sampling_layer
         # Decoder layers
         generative_layer.name = "generative"
-        self.generative_layer = generative_layer
+        self._generative_layer = generative_layer
         # Add regularization layers
         self._regularization_layers = regularization_layers
 
@@ -42,7 +43,7 @@ class VAE(keras.Model, ABC):
         inference_out_shape = self._inference_layer.compute_output_shape(input_processing_out_shape)
         self._sampling_layer.build((inference_out_shape, aux_input_shape))
         sampling_out_shape = self._sampling_layer.compute_output_shape((inference_out_shape, aux_input_shape))
-        self.generative_layer.build(input_shape + (sampling_out_shape,))
+        self._generative_layer.build(input_shape + (sampling_out_shape,))
         for layer in self._regularization_layers:
             layer.build(input_shape)
 
@@ -74,20 +75,20 @@ class VAE(keras.Model, ABC):
     def decode(self, inputs, training: bool = False, **kwargs):
         if training:
             vae_input, aux_input, z = inputs
-            return self.generative_layer((vae_input, aux_input, z), training=training,
-                                         iterations=self.optimizer.iterations + 1, **kwargs)
+            return self._generative_layer((vae_input, aux_input, z), training=training,
+                                          iterations=self.optimizer.iterations + 1, **kwargs)
         else:
             z = inputs
-            return self.generative_layer(z, training=training, **kwargs)
+            return self._generative_layer(z, training=training, **kwargs)
 
     def summary(
-        self,
-        line_length=None,
-        positions=None,
-        print_fn=None,
-        expand_nested=False,
-        show_trainable=False,
-        layer_range=None
+            self,
+            line_length=None,
+            positions=None,
+            print_fn=None,
+            expand_nested=False,
+            show_trainable=False,
+            layer_range=None
     ):
         graph = self.build_graph()
         graph.summary(line_length, positions, print_fn, expand_nested, show_trainable, layer_range)
@@ -98,3 +99,30 @@ class VAE(keras.Model, ABC):
         z, *_ = self.encode((vae_input, vae_aux_input))
         dec_outputs = self.decode((vae_input, vae_aux_input, z))
         return keras.Model(inputs=(vae_input, vae_aux_input), outputs=dec_outputs)
+
+    def get_config(self):
+        base_config = super().get_config()
+        config = {
+            "input_processing_layer": keras.saving.serialize_keras_object(self._input_processing_layer),
+            "inference_layer": keras.saving.serialize_keras_object(self._inference_layer),
+            "sampling_layer": keras.saving.serialize_keras_object(self._sampling_layer),
+            "generative_layer": keras.saving.serialize_keras_object(self._generative_layer),
+            "regularization_layers": [keras.saving.serialize_keras_object(l) for l in self._regularization_layers]
+        }
+        return {**base_config, **config}
+
+    @classmethod
+    def from_config(cls, config, custom_objects=None):
+        input_processing_layer = keras.saving.deserialize_keras_object(config.pop("input_processing_layer"))
+        inference_layer = keras.saving.deserialize_keras_object(config.pop("inference_layer"))
+        sampling_layer = keras.saving.deserialize_keras_object(config.pop("sampling_layer"))
+        generative_layer = keras.saving.deserialize_keras_object(config.pop("generative_layer"))
+        regularization_layers = [keras.layers.deserialize(l) for l in config.pop("regularization_layers")]
+        return cls(
+            input_processing_layer,
+            inference_layer,
+            sampling_layer,
+            generative_layer,
+            regularization_layers,
+            **config
+        )

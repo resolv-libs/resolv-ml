@@ -90,13 +90,12 @@ class BidirectionalRNNEncoder(SequenceEncoder):
         self._stacked_bidirectional_rnn_layers.build(embedding_output_shape)
 
     def encode(self, inputs, training: bool = False, **kwargs):
-        _, *output_states = self._stacked_bidirectional_rnn_layers(inputs, training=training, **kwargs)
-        last_hidden_state = output_states[-1][0]
-        return last_hidden_state
+        _, hidden_state, _ = self._stacked_bidirectional_rnn_layers(inputs, training=training, **kwargs)
+        return hidden_state
 
     def compute_output_shape(self, input_shape):
         rnn_output_shape = self._stacked_bidirectional_rnn_layers.compute_output_shape(input_shape)
-        return rnn_output_shape[1]
+        return rnn_output_shape[0]
 
     def get_initial_state(self, batch_size):
         return self._stacked_bidirectional_rnn_layers.get_initial_state(batch_size)

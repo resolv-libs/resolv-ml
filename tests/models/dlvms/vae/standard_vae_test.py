@@ -22,7 +22,7 @@ class Seq2SeqVAETest(unittest.TestCase):
             "batch_size": 32,
             "sequence_length": 64,
             "sequence_features": 1,
-            "num_notes": 130,
+            "vocabulary_size": 130,
             "embedding_size": 70,
             "enc_rnn_sizes": [16, 16],
             "dec_rnn_sizes": [16, 16],
@@ -40,20 +40,20 @@ class Seq2SeqVAETest(unittest.TestCase):
         os.environ["KERAS_BACKEND"] = "tensorflow"
         self.config["output_dir"].mkdir(parents=True, exist_ok=True)
 
-    def get_embedding_layer(self, name: str) -> tf.keras.layers.Embedding:
-        return keras.layers.Embedding(self.config["num_notes"], self.config["embedding_size"], name=name)
+    def get_embedding_layer(self, name: str) -> keras.layers.Embedding:
+        return keras.layers.Embedding(self.config["vocabulary_size"], self.config["embedding_size"], name=name)
 
     def get_autoregressive_model(self) -> StandardVAE:
         return StandardVAE(
             z_size=self.config["z_size"],
             input_processing_layer=encoders.BidirectionalRNNEncoder(
-                num_classes=self.config["num_notes"],
+                num_classes=self.config["vocabulary_size"],
                 enc_rnn_sizes=self.config["enc_rnn_sizes"],
                 embedding_layer=self.get_embedding_layer("encoder_embedding"),
                 dropout=self.config["dropout"]
             ),
             generative_layer=decoders.RNNAutoregressiveDecoder(
-                num_classes=self.config["num_notes"],
+                num_classes=self.config["vocabulary_size"],
                 dec_rnn_sizes=self.config["dec_rnn_sizes"],
                 embedding_layer=self.get_embedding_layer("decoder_embedding"),
                 dropout=self.config["dropout"],
@@ -69,7 +69,7 @@ class Seq2SeqVAETest(unittest.TestCase):
         return StandardVAE(
             z_size=self.config["z_size"],
             input_processing_layer=encoders.BidirectionalRNNEncoder(
-                num_classes=self.config["num_notes"],
+                num_classes=self.config["vocabulary_size"],
                 enc_rnn_sizes=self.config["enc_rnn_sizes"],
                 embedding_layer=self.get_embedding_layer("encoder_embedding"),
                 dropout=self.config["dropout"]
@@ -77,14 +77,14 @@ class Seq2SeqVAETest(unittest.TestCase):
             generative_layer=decoders.HierarchicalRNNDecoder(
                 level_lengths=self.config["level_lengths"],
                 core_decoder=decoders.RNNAutoregressiveDecoder(
-                    num_classes=self.config["num_notes"],
+                    num_classes=self.config["vocabulary_size"],
                     dec_rnn_sizes=self.config["dec_rnn_sizes"],
                     embedding_layer=self.get_embedding_layer("decoder_embedding"),
                     dropout=self.config["dropout"],
                     sampling_schedule=self.config["sampling_schedule"],
                     sampling_rate=self.config["sampling_rate"]
                 ),
-                num_classes=self.config["num_notes"],
+                num_classes=self.config["vocabulary_size"],
                 dec_rnn_sizes=self.config["dec_rnn_sizes"],
                 dropout=self.config["dropout"]
             ),
@@ -141,6 +141,9 @@ class Seq2SeqVAETest(unittest.TestCase):
         )
         vae_model.fit(dataset, batch_size=self.config["batch_size"], epochs=1)
         self.assertTrue(vae_model)
+        vae_model.save(self.config["output_dir"] / "seq2seq.keras")
+        loaded_vae_model = keras.saving.load_model(self.config["output_dir"] / "seq2seq.keras")
+        self.assertTrue(loaded_vae_model)
 
     def test_hier_seq2seq_vae_training(self):
         vae_model = self.get_hierarchical_model()
@@ -152,6 +155,20 @@ class Seq2SeqVAETest(unittest.TestCase):
         )
         vae_model.fit(dataset, batch_size=self.config["batch_size"], epochs=1)
         self.assertTrue(vae_model)
+
+    def test(self):
+        from keras.layers import RNN, LSTM, LSTMCell
+
+        inputs = keras.Input(shape=(5, 10))
+        first_lstm_layer_out, *cell_states = LSTM(10, return_sequences=True, return_state=True)(inputs)
+        second_lstm_layer_out = LSTM(10)(first_lstm_layer_out, initial_state=cell_states)
+        model_a = keras.Model(inputs, second_lstm_layer_out)
+        model_a.summary()
+
+        inputs = keras.Input(shape=(5, 10))
+        stacked_lstm_outputs = RNN([LSTMCell(10), LSTMCell(10)], return_sequences=True)(inputs)
+        model_b = keras.Model(inputs, stacked_lstm_outputs)
+        model_b.summary()
 
 
 if __name__ == '__main__':

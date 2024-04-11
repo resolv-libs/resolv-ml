@@ -59,3 +59,11 @@ class StandardVAE(VAE):
         self.div_loss_tracker.update_state(div_loss)
         self.div_bits_tracker.update_state(div_loss_bits)
         self.div_beta_tracker.update_state(div_beta)
+        
+    def get_config(self):
+        base_config = super().get_config()
+        return base_config
+
+    @classmethod
+    def from_config(cls, config, custom_objects=None):
+        super().from_config(config, custom_objects)

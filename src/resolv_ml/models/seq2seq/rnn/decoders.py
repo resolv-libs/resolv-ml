@@ -36,7 +36,7 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
         if len(dec_rnn_sizes) > 1 or (isinstance(rnn_cell, list) and len(rnn_cell) > 1):
             self._stacked_rnn_cells = keras.layers.StackedRNNCells(self._stacked_rnn_cells)
         self._initial_state_layer = rnn_layers.InitialRNNCellStateFromEmbedding(
-            cell_state_size=self._stacked_rnn_cells.state_size,
+            cell_state_sizes=self._stacked_rnn_cells.state_size,
             name="z_to_initial_state"
         )
         self._output_projection = output_projection_layer
@@ -156,7 +156,7 @@ class HierarchicalRNNDecoder(SequenceDecoder):
                 level_rnn_cells = keras.layers.StackedRNNCells(level_rnn_cells)
             self._hierarchical_initial_states.append(
                 rnn_layers.InitialRNNCellStateFromEmbedding(
-                    cell_state_size=level_rnn_cells.state_size,
+                    cell_state_sizes=level_rnn_cells.state_size,
                     name=f"level_{level_idx}_emb_to_initial_state"
                 )
             )
