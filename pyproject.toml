@@ -35,7 +35,7 @@ include = ["CHANGELOG.md"]
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.12"
-keras = "^3.0"
+keras = ">=3"
 
 [tool.poetry.group.dev.dependencies]
 

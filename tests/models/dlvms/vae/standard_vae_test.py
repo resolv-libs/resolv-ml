@@ -46,7 +46,7 @@ class Seq2SeqVAETest(unittest.TestCase):
     def get_autoregressive_model(self) -> StandardVAE:
         return StandardVAE(
             z_size=self.config["z_size"],
-            input_processing_layer=encoders.RNNEncoder(
+            input_processing_layer=encoders.BidirectionalRNNEncoder(
                 num_classes=self.config["num_notes"],
                 enc_rnn_sizes=self.config["enc_rnn_sizes"],
                 embedding_layer=self.get_embedding_layer("encoder_embedding"),
@@ -125,7 +125,7 @@ class Seq2SeqVAETest(unittest.TestCase):
         # TODO - Fix VAE plot (don't know what the problem is)
         keras.utils.plot_model(
             vae_model.build_graph(),
-            show_shapes=False,  # TODO - Keras bug can't print shapes for layers with multiple outputs
+            show_shapes=True,  # TODO - Keras bug can't print shapes for layers with multiple outputs
             show_layer_names=True,
             show_dtype=False,  # TODO - Keras bug can't print dtypes for layers with multiple outputs
             to_file=self.config["output_dir"] / "seq2seq.png",
@@ -154,6 +154,26 @@ class Seq2SeqVAETest(unittest.TestCase):
         )
         vae_model.fit(dataset, batch_size=self.config["batch_size"], epochs=1)
         self.assertTrue(vae_model)
+
+    def test_rnn(self):
+        model_a = keras.Sequential([
+            keras.Input(shape=(5, 10)),
+            keras.layers.LSTM(10, return_sequences=True),
+            keras.layers.LSTM(10, return_state=True)
+        ])
+        model_b = keras.Sequential([
+            keras.Input(shape=(5, 10)),
+            keras.layers.RNN([keras.layers.LSTMCell(10), keras.layers.LSTMCell(10)], return_state=True)
+        ])
+        model_a.summary()
+        model_b.summary()
+
+    def test_rnn_bid(self):
+        model_a = keras.Sequential([
+            keras.Input(shape=(5, 10)),
+            keras.layers.Bidirectional(keras.layers.RNN(keras.layers.LSTMCell(10), return_state=True))
+        ])
+        model_a.summary()
 
 
 if __name__ == '__main__':

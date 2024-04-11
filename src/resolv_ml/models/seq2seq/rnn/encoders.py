@@ -18,13 +18,11 @@ class RNNEncoder(SequenceEncoder):
                  name: str = "rnn_encoder",
                  **kwargs):
         super(RNNEncoder, self).__init__(embedding_layer=embedding_layer, name=name, **kwargs)
-        self._stacked_rnn_cells = rnn_layers.StackedRNN(
-            layers_sizes=enc_rnn_sizes,
-            rnn_cell=rnn_cell,
+        self._stacked_rnn_cells = keras.layers.RNN(
+            cell=rnn_cell if rnn_cell else [rnn_layers.get_default_rnn_cell(size, dropout) for size in enc_rnn_sizes],
             return_sequences=False,
             return_state=True,
-            dropout=dropout,
-            name='stacked_rnn_cells'
+            name="stacked_rnn_cells"
         )
 
     @property
@@ -38,12 +36,16 @@ class RNNEncoder(SequenceEncoder):
         self._stacked_rnn_cells.build(embedding_output_shape)
 
     def encode(self, inputs, training: bool = False, **kwargs):
-        _, hidden_state, _ = self._stacked_rnn_cells(inputs, training=training, **kwargs)
-        return hidden_state
+        _, *output_states = self._stacked_rnn_cells(inputs, initial_state=None, training=training, **kwargs)
+        last_hidden_state = output_states[-1][0]
+        return last_hidden_state
 
     def compute_output_shape(self, input_shape):
         rnn_output_shape = self._stacked_rnn_cells.compute_output_shape(input_shape)
-        return rnn_output_shape[1]
+        hidden_state_shape = rnn_output_shape[1]
+        batch_size = hidden_state_shape[0]
+        last_layer_state_size = hidden_state_shape[1][-1]
+        return batch_size, last_layer_state_size
 
     def get_initial_state(self, batch_size):
         return self._stacked_rnn_cells.get_initial_state(batch_size)
@@ -88,8 +90,9 @@ class BidirectionalRNNEncoder(SequenceEncoder):
         self._stacked_bidirectional_rnn_layers.build(embedding_output_shape)
 
     def encode(self, inputs, training: bool = False, **kwargs):
-        _, hidden_state, _ = self._stacked_bidirectional_rnn_layers(inputs, training=training, **kwargs)
-        return hidden_state
+        _, *output_states = self._stacked_bidirectional_rnn_layers(inputs, training=training, **kwargs)
+        last_hidden_state = output_states[-1][0]
+        return last_hidden_state
 
     def compute_output_shape(self, input_shape):
         rnn_output_shape = self._stacked_bidirectional_rnn_layers.compute_output_shape(input_shape)

@@ -1,11 +1,9 @@
 # TODO - DOC
-import copy
 from typing import List, Any
 
 import keras
 import keras.ops as k_ops
 import numpy as np
-from keras.src.layers.rnn.dropout_rnn_cell import DropoutRNNCell
 
 
 def get_default_rnn_cell(cell_size: int, dropout: float) -> keras.layers.LSTMCell:
@@ -75,95 +73,12 @@ class InitialRNNCellStateFromEmbedding(keras.Layer):
         return np.ravel(self._cell_state_size)
 
 
-@keras.saving.register_keras_serializable(package="RNNLayers", name="StackedRNN")
-class StackedRNN(keras.Layer):
-
-    def __init__(self,
-                 layers_sizes: List[int],
-                 rnn_cell: Any = None,
-                 dropout: float = 0.0,
-                 return_sequences: bool = False,
-                 return_state: bool = True,
-                 name="stacked_rnn", **kwargs):
-        super(StackedRNN, self).__init__(name=name, **kwargs)
-        if not layers_sizes:
-            raise ValueError("No layers provided. Please provide a list containing the layers sizes.")
-        self._return_sequences = return_sequences
-        self._return_state = return_state
-        self._layers: List[keras.layers.RNN] = []
-        for i, layer_size in enumerate(layers_sizes):
-            is_output_layer = (i == len(layers_sizes) - 1)
-            is_return_sequences_layer = return_sequences if is_output_layer else True
-            self._layers.append(keras.layers.RNN(
-                rnn_cell if rnn_cell else get_default_rnn_cell(layer_size, dropout),
-                return_sequences=is_return_sequences_layer,
-                return_state=True,
-                go_backwards=False,
-                stateful=False,
-                unroll=False,
-                zero_output_for_mask=False
-            ))
-
-    @property
-    def state_size(self):
-        return [self._layers[0].state_size, self._layers[0].state_size]
-
-    def build(self, input_shape):
-        super().build(input_shape)
-        for i, layer in enumerate(self._layers):
-            layer.build(input_shape)
-            output_shape = layer.compute_output_shape(input_shape)
-            input_shape, _ = output_shape[0], output_shape[1:]
-
-    def call(self, inputs, training: bool = False, **kwargs) -> Any:
-        initial_states = kwargs.get("initial_states")
-        if initial_states and (not isinstance(initial_states, list) or len(initial_states) != len(self._layers)):
-            raise ValueError("initial_states must be a list of state tensors (one per layer).")
-        hidden_states = []
-        cell_states = []
-        prev_output = inputs
-        for layer_idx, layer in enumerate(self._layers):
-            initial_state = initial_states[layer_idx] if initial_states else None
-            prev_output, state_h, state_c = layer(prev_output, initial_state=initial_state,
-                                                  mask=kwargs.get("mask"), training=training)
-            hidden_states.append(state_h)
-            cell_states.append(state_c)
-        return (prev_output, hidden_states[-1], cell_states[-1]) if self._return_state else prev_output
-
-    def compute_output_shape(self, input_shape, initial_state_shape=None):
-        output_shape = input_shape
-        state_shape = None
-        for i, layer in enumerate(self._layers):
-            output_shape = layer.compute_output_shape(output_shape, initial_state_shape)
-            output_shape, state_shape = output_shape[0], output_shape[1:]
-        if self._return_state:
-            return (output_shape,) + state_shape
-        return output_shape
-
-    def get_initial_state(self, batch_size):
-        return self._layers[0].get_initial_state(batch_size)
-
-    def get_config(self):
-        base_config = super().get_config()
-        config = {
-            "return_sequences": self._return_sequences,
-            "return_state": self._return_state,
-            "layers": [keras.saving.serialize_keras_object(layer) for layer in self._layers],
-        }
-        return {**base_config, **config}
-
-    @classmethod
-    def from_config(cls, config):
-        layers = [keras.layers.deserialize(layer) for layer in config.pop("layers")]
-        return cls(layers, **config)
-
-
 @keras.saving.register_keras_serializable(package="RNNLayers", name="StackedBidirectionalRNN")
 class StackedBidirectionalRNN(keras.Layer):
 
     def __init__(self,
                  layers_sizes: List[int],
-                 rnn_cell: DropoutRNNCell = None,
+                 rnn_cell: Any = None,
                  merge_modes: List[str] = None,
                  return_sequences: bool = False,
                  return_state: bool = True,
@@ -203,7 +118,7 @@ class StackedBidirectionalRNN(keras.Layer):
         super().build(input_shape)
         for i, layer in enumerate(self._layers):
             layer.build(input_shape)
-            output_shape = self._compute_layer_output_shape(layer, input_shape)
+            output_shape = layer.compute_output_shape(input_shape)
             input_shape, _ = output_shape[0], output_shape[1:]
 
     def call(self, inputs, training: bool = False, **kwargs):
@@ -216,8 +131,7 @@ class StackedBidirectionalRNN(keras.Layer):
                 (not isinstance(initial_states_bw, list) or len(initial_states_bw) != len(self._layers))):
             raise ValueError("initial_states_bw must be a list of state tensors (one per layer).")
 
-        hidden_states = []
-        cell_states = []
+        layers_states = []
         prev_output = inputs
         for layer_idx, layer in enumerate(self._layers):
             if initial_states_fw is None or initial_states_bw is None:
@@ -228,15 +142,14 @@ class StackedBidirectionalRNN(keras.Layer):
                                                         mask=kwargs.get("mask"), training=training)
             state_h = k_ops.concatenate([fw_h, bw_h], axis=-1)
             state_c = k_ops.concatenate([fw_c, bw_c], axis=-1)
-            hidden_states.append(state_h)
-            cell_states.append(state_c)
-        return (prev_output, hidden_states[-1], cell_states[-1]) if self._return_state else prev_output
+            layers_states += [(state_h, state_c)]
+        return [prev_output, *layers_states] if self._return_state else prev_output
 
     def compute_output_shape(self, input_shape, initial_state_shape=None):
         output_shape = input_shape
         state_shape = None
         for i, layer in enumerate(self._layers):
-            output_shape = self._compute_layer_output_shape(layer, output_shape, initial_state_shape)
+            output_shape = layer.compute_output_shape(output_shape, initial_state_shape)
             output_shape, state_shape = output_shape[0], output_shape[1:]
         if self._return_state:
             state_shape = list(state_shape[0])
@@ -262,20 +175,3 @@ class StackedBidirectionalRNN(keras.Layer):
     def from_config(cls, config):
         layers = [keras.layers.deserialize(layer) for layer in config.pop("layers")]
         return cls(layers, **config)
-
-    @classmethod
-    def _compute_layer_output_shape(cls, layer, input_shape, initial_state_shape=None):
-        # TODO - Bidirectional output shape - Is this a Keras bug?
-        # return self._layers[-1].compute_output_shape(input_shape)
-        output_shape = layer.forward_layer.compute_output_shape(input_shape, initial_state_shape)
-        if layer.return_state:
-            output_shape, state_shape = output_shape[0], output_shape[1:]
-        if layer.merge_mode == "concat":
-            output_shape = list(output_shape)
-            output_shape[-1] *= 2
-            output_shape = tuple(output_shape)
-        elif layer.merge_mode is None:
-            output_shape = output_shape, copy.copy(output_shape)
-        if layer.return_state:
-            return (output_shape,) + state_shape + copy.copy(state_shape)
-        return output_shape

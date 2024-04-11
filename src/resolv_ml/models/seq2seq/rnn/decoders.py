@@ -31,14 +31,10 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
             name=name,
             **kwargs
         )
-        self._stacked_rnn_cells = rnn_layers.StackedRNN(
-            layers_sizes=dec_rnn_sizes,
-            rnn_cell=rnn_cell,
-            dropout=dropout,
-            return_sequences=False,
-            return_state=True,
-            name="stacked_rnn_cells"
-        )
+        self._stacked_rnn_cells = rnn_cell if rnn_cell else \
+            [rnn_layers.get_default_rnn_cell(size, dropout) for size in dec_rnn_sizes]
+        if len(dec_rnn_sizes) > 1 or (isinstance(rnn_cell, list) and len(rnn_cell) > 1):
+            self._stacked_rnn_cells = keras.layers.StackedRNNCells(self._stacked_rnn_cells)
         self._initial_state_layer = rnn_layers.InitialRNNCellStateFromEmbedding(
             cell_state_size=self._stacked_rnn_cells.state_size,
             name="z_to_initial_state"
@@ -64,20 +60,18 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
                 name="output_projection"
             )
         rnn_input_shape = batch_size, 1, (self._get_decoder_input_size(input_sequence_shape) + z_shape[1])
-        self._stacked_rnn_cells.build(input_shape=rnn_input_shape)
-        self._initial_state_layer.build(input_shape=z_shape)
-        self._output_projection.build(input_shape=self._stacked_rnn_cells.compute_output_shape(rnn_input_shape)[0])
+        self._stacked_rnn_cells.build(rnn_input_shape)
+        self._initial_state_layer.build(z_shape)
+        self._output_projection.build((batch_size, self._stacked_rnn_cells.output_size))
 
     def decode(self, input_sequence, aux_inputs, z, teacher_force_probability, **kwargs):
         batch_size, sequence_length, features_length = input_sequence.shape
         initial_state = self._initial_state_layer(z, training=True)
-        z = k_ops.expand_dims(z, axis=1)
         decoder_input = k_ops.zeros(shape=(batch_size, self._get_decoder_input_size(input_sequence.shape)))
         output_sequence_logits = []
         for i in range(sequence_length):
-            decoder_input = k_ops.expand_dims(decoder_input, axis=1)
             decoder_input = k_ops.concatenate([decoder_input, z], axis=-1)
-            predicted_token, output_logits, = self._predict_sequence_token(
+            predicted_token, output_logits, initial_state = self._predict_sequence_token(
                 rnn_input=decoder_input,
                 initial_state=initial_state,
                 sampling_mode="argmax",
@@ -90,7 +84,7 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
         return k_ops.stack(output_sequence_logits, axis=1)
 
     def sample(self, z, sampling_mode, **kwargs):
-        predicted_token, _, = self._predict_sequence_token(
+        predicted_token, _, _ = self._predict_sequence_token(
             rnn_input=z,
             initial_state=kwargs.get("initial_state", None),
             sampling_mode=sampling_mode,
@@ -101,9 +95,7 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
 
     def _predict_sequence_token(self, rnn_input, initial_state=None, temperature: float = 1.0,
                                 sampling_mode: str = "argmax", training: bool = False, **kwargs):
-        dec_emb_output, *initial_state = self._stacked_rnn_cells(rnn_input,
-                                                                 initial_state=initial_state,
-                                                                 training=training)
+        dec_emb_output, output_state = self._stacked_rnn_cells(rnn_input, states=initial_state, training=training)
         output_logits = self._output_projection(dec_emb_output, training=training)
         output_logits = output_logits / temperature
         token_probabilities = keras.ops.softmax(output_logits)
@@ -113,7 +105,7 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
             predicted_token = keras.random.categorical(output_logits, 1, seed=kwargs.get("seed", None))
         else:
             raise NotImplementedError(f"Sampling mode {sampling_mode} is not implemented.")
-        return predicted_token, output_logits
+        return predicted_token, output_logits, output_state
 
     def compute_output_shape(self, input_shape):
         batch_size = input_shape[0][0]
