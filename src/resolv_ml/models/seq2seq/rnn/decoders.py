@@ -14,6 +14,7 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
 
     def __init__(self,
                  dec_rnn_sizes: List[int],
+                 num_classes: int,
                  rnn_cell: Any = None,
                  output_projection_layer: keras.Layer = None,
                  embedding_layer: keras.layers.Embedding = None,
@@ -29,6 +30,11 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
             name=name,
             **kwargs
         )
+        self._dec_rnn_sizes = dec_rnn_sizes
+        self._num_classes = num_classes
+        self._rnn_cell = rnn_cell
+        self._output_projection = output_projection_layer
+        self._dropout = dropout
         self._stacked_rnn_cells = rnn_cell if rnn_cell else \
             [rnn_layers.get_default_rnn_cell(size, dropout) for size in dec_rnn_sizes]
         if len(dec_rnn_sizes) > 1 or (isinstance(rnn_cell, list) and len(rnn_cell) > 1):
@@ -37,7 +43,6 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
             cell_state_sizes=self._stacked_rnn_cells.state_size,
             name="z_to_initial_state"
         )
-        self._output_projection = output_projection_layer
 
     def build(self, input_shape):
         input_sequence_shape, _, z_shape = input_shape
@@ -57,7 +62,7 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
                 name="output_projection"
             )
 
-    def decode(self, input_sequence, aux_inputs, z, teacher_force_probability, **kwargs):
+    def decode(self, input_sequence, aux_inputs, z, teacher_force_probability=0.0, **kwargs):
         batch_size, sequence_length, features_length = input_sequence.shape
         initial_state = self._initial_state_layer(z, training=True)
         decoder_input = k_ops.zeros(shape=(batch_size, self._get_decoder_input_size(input_sequence.shape)))
@@ -77,9 +82,10 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
         return k_ops.stack(output_sequence_logits, axis=1)
 
     def sample(self, z, sampling_mode, **kwargs):
+        initial_state = self._initial_state_layer(z, training=True)
         predicted_token, _, _ = self._predict_sequence_token(
             rnn_input=z,
-            initial_state=kwargs.get("initial_state", None),
+            initial_state=initial_state,
             sampling_mode=sampling_mode,
             training=False,
             **kwargs
@@ -107,18 +113,19 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
     def get_config(self):
         base_config = super().get_config()
         config = {
-            "stacked_rnn_cells": keras.saving.serialize_keras_object(self._stacked_rnn_cells),
-            "initial_state_layer": keras.saving.serialize_keras_object(self._initial_state_layer),
-            "output_projection": keras.saving.serialize_keras_object(self._output_projection)
+            "dec_rnn_sizes": self._dec_rnn_sizes,
+            "num_classes": self._num_classes,
+            "rnn_cell": keras.saving.serialize_keras_object(self._rnn_cell),
+            "output_projection": keras.saving.serialize_keras_object(self._output_projection),
+            "dropout": self._dropout,
         }
         return {**base_config, **config}
 
     @classmethod
     def from_config(cls, config, custom_objects=None):
-        stacked_rnn_cells = keras.layers.deserialize(config.pop("stacked_rnn_cells"))
-        initial_state_layer = keras.layers.deserialize(config.pop("initial_state_layer"))
+        rnn_cell = keras.saving.deserialize_keras_object(config.pop("rnn_cell"))
         output_projection = keras.layers.deserialize(config.pop("output_projection"))
-        return cls(stacked_rnn_cells, initial_state_layer, output_projection, **config)
+        return cls(rnn_cell=rnn_cell, output_projection_layer=output_projection, **config)
 
 
 @keras.saving.register_keras_serializable(package="SequenceDecoders", name="HierarchicalRNNDecoder")

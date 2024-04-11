@@ -1,5 +1,4 @@
 # TODO - DOC
-from abc import ABC, abstractmethod
 
 import keras
 
@@ -55,7 +54,8 @@ class SequenceEncoder(keras.Model):
         return input_shape
 
 
-class SequenceDecoder(ABC, keras.Model):
+@keras.saving.register_keras_serializable(package="SequenceDecoders", name="SequenceDecoder")
+class SequenceDecoder(keras.Model):
 
     def __init__(self,
                  embedding_layer: keras.Layer = None,
@@ -68,13 +68,11 @@ class SequenceDecoder(ABC, keras.Model):
         self._sampling_schedule = sampling_schedule
         self._sampling_rate = sampling_rate
 
-    @abstractmethod
-    def decode(self, input_sequence, aux_inputs, z, teacher_force_probability, **kwargs):
-        pass
+    def decode(self, input_sequence, aux_inputs, z, teacher_force_probability=0.0, **kwargs):
+        raise NotImplementedError("SequenceDecoder.decode must be overridden by subclasses.")
 
-    @abstractmethod
     def sample(self, z, sampling_mode, **kwargs):
-        pass
+        raise NotImplementedError("SequenceDecoder.sample must be overridden by subclasses.")
 
     def build(self, input_shape):
         super().build(input_shape)
@@ -108,7 +106,12 @@ class SequenceDecoder(ABC, keras.Model):
     @classmethod
     def from_config(cls, config, custom_objects=None):
         embedding_layer = keras.layers.deserialize(config.pop("embedding_layer"))
-        return cls(embedding_layer, **config)
+        return cls(embedding_layer=embedding_layer, **config)
+
+    def build_from_config(self, config):
+        # A sequence decoder behave differently in inference and training mode: having different inputs,
+        # it is not possible to build it from config, thus it is stateless.
+        pass
 
     def _get_decoder_input_size(self, input_sequence_shape):
         if self._embedding_layer:
