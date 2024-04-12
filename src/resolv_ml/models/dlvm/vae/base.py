@@ -1,12 +1,10 @@
 # TODO - DOC
-from abc import ABC, abstractmethod
 from typing import List
 
 import keras
 
 
-@keras.saving.register_keras_serializable(package="VAE", name="VAE")
-class VAE(keras.Model, ABC):
+class VAE(keras.Model):
 
     def __init__(self,
                  input_processing_layer: keras.Layer,
@@ -30,9 +28,8 @@ class VAE(keras.Model, ABC):
         # Add regularization layers
         self._regularization_layers = regularization_layers
 
-    @abstractmethod
     def _add_regularization_losses(self, regularization_losses):
-        pass
+        raise NotImplementedError("VAE subclasses must implement _add_regularization_losses.")
 
     def build(self, input_shape):
         super().build(input_shape)
@@ -41,9 +38,9 @@ class VAE(keras.Model, ABC):
         input_processing_out_shape = self._input_processing_layer.compute_output_shape(vae_input_shape)
         self._inference_layer.build(input_processing_out_shape)
         inference_out_shape = self._inference_layer.compute_output_shape(input_processing_out_shape)
-        self._sampling_layer.build((inference_out_shape, aux_input_shape))
-        sampling_out_shape = self._sampling_layer.compute_output_shape((inference_out_shape, aux_input_shape))
-        self._generative_layer.build(input_shape + (sampling_out_shape,))
+        self._sampling_layer.build((*inference_out_shape, aux_input_shape))
+        sampling_out_shape = self._sampling_layer.compute_output_shape((*inference_out_shape, aux_input_shape))
+        self._generative_layer.build(tuple(input_shape) + (sampling_out_shape,))
         for layer in self._regularization_layers:
             layer.build(input_shape)
 
@@ -69,7 +66,7 @@ class VAE(keras.Model, ABC):
         vae_input, aux_input = inputs
         input_processing_layer_out = self._input_processing_layer(vae_input, training=training, **kwargs)
         posterior_dist_params = self._inference_layer(input_processing_layer_out, training=training, **kwargs)
-        z = self._sampling_layer((posterior_dist_params, aux_input), training=training, **kwargs)
+        z = self._sampling_layer((*posterior_dist_params, aux_input), training=training, **kwargs)
         return z, *posterior_dist_params
 
     def decode(self, inputs, training: bool = False, **kwargs):
@@ -99,30 +96,3 @@ class VAE(keras.Model, ABC):
         z, *_ = self.encode((vae_input, vae_aux_input))
         dec_outputs = self.decode((vae_input, vae_aux_input, z))
         return keras.Model(inputs=(vae_input, vae_aux_input), outputs=dec_outputs)
-
-    def get_config(self):
-        base_config = super().get_config()
-        config = {
-            "input_processing_layer": keras.saving.serialize_keras_object(self._input_processing_layer),
-            "inference_layer": keras.saving.serialize_keras_object(self._inference_layer),
-            "sampling_layer": keras.saving.serialize_keras_object(self._sampling_layer),
-            "generative_layer": keras.saving.serialize_keras_object(self._generative_layer),
-            "regularization_layers": [keras.saving.serialize_keras_object(l) for l in self._regularization_layers]
-        }
-        return {**base_config, **config}
-
-    @classmethod
-    def from_config(cls, config, custom_objects=None):
-        input_processing_layer = keras.saving.deserialize_keras_object(config.pop("input_processing_layer"))
-        inference_layer = keras.saving.deserialize_keras_object(config.pop("inference_layer"))
-        sampling_layer = keras.saving.deserialize_keras_object(config.pop("sampling_layer"))
-        generative_layer = keras.saving.deserialize_keras_object(config.pop("generative_layer"))
-        regularization_layers = [keras.layers.deserialize(l) for l in config.pop("regularization_layers")]
-        return cls(
-            input_processing_layer,
-            inference_layer,
-            sampling_layer,
-            generative_layer,
-            regularization_layers,
-            **config
-        )

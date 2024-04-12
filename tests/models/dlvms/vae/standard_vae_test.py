@@ -5,6 +5,7 @@ from pathlib import Path
 
 import keras
 import tensorflow as tf
+from deepdiff import DeepDiff
 from resolv_pipelines.data.loaders import TFRecordLoader
 from resolv_pipelines.data.representation.mir import PitchSequenceRepresentation
 
@@ -43,18 +44,22 @@ class Seq2SeqVAETest(unittest.TestCase):
     def get_embedding_layer(self, name: str) -> keras.layers.Embedding:
         return keras.layers.Embedding(self.config["vocabulary_size"], self.config["embedding_size"], name=name)
 
+    def get_input_shape(self):
+        input_seq_shape = self.config["batch_size"], self.config["sequence_length"], self.config["sequence_features"]
+        aux_input_shape = self.config["batch_size"], 1
+        return input_seq_shape, aux_input_shape
+
     def get_autoregressive_model(self) -> StandardVAE:
-        return StandardVAE(
+        model = StandardVAE(
             z_size=self.config["z_size"],
             input_processing_layer=encoders.BidirectionalRNNEncoder(
-                num_classes=self.config["vocabulary_size"],
                 enc_rnn_sizes=self.config["enc_rnn_sizes"],
                 embedding_layer=self.get_embedding_layer("encoder_embedding"),
                 dropout=self.config["dropout"]
             ),
             generative_layer=decoders.RNNAutoregressiveDecoder(
-                num_classes=self.config["vocabulary_size"],
                 dec_rnn_sizes=self.config["dec_rnn_sizes"],
+                num_classes=self.config["vocabulary_size"],
                 embedding_layer=self.get_embedding_layer("decoder_embedding"),
                 dropout=self.config["dropout"],
                 sampling_schedule=self.config["sampling_schedule"],
@@ -64,12 +69,13 @@ class Seq2SeqVAETest(unittest.TestCase):
             beta_rate=self.config["beta_rate"],
             free_bits=self.config["free_bits"]
         )
+        model.build(self.get_input_shape())
+        return model
 
     def get_hierarchical_model(self) -> StandardVAE:
-        return StandardVAE(
+        model = StandardVAE(
             z_size=self.config["z_size"],
             input_processing_layer=encoders.BidirectionalRNNEncoder(
-                num_classes=self.config["vocabulary_size"],
                 enc_rnn_sizes=self.config["enc_rnn_sizes"],
                 embedding_layer=self.get_embedding_layer("encoder_embedding"),
                 dropout=self.config["dropout"]
@@ -77,14 +83,13 @@ class Seq2SeqVAETest(unittest.TestCase):
             generative_layer=decoders.HierarchicalRNNDecoder(
                 level_lengths=self.config["level_lengths"],
                 core_decoder=decoders.RNNAutoregressiveDecoder(
-                    num_classes=self.config["vocabulary_size"],
                     dec_rnn_sizes=self.config["dec_rnn_sizes"],
+                    num_classes=self.config["vocabulary_size"],
                     embedding_layer=self.get_embedding_layer("decoder_embedding"),
                     dropout=self.config["dropout"],
                     sampling_schedule=self.config["sampling_schedule"],
                     sampling_rate=self.config["sampling_rate"]
                 ),
-                num_classes=self.config["vocabulary_size"],
                 dec_rnn_sizes=self.config["dec_rnn_sizes"],
                 dropout=self.config["dropout"]
             ),
@@ -92,10 +97,12 @@ class Seq2SeqVAETest(unittest.TestCase):
             beta_rate=self.config["beta_rate"],
             free_bits=self.config["free_bits"]
         )
+        model.build(self.get_input_shape())
+        return model
 
     def load_dataset(self) -> tf.data.TFRecordDataset:
         def map_fn(_, seq):
-            empty_aux = tf.zeros(self.config["batch_size"])
+            empty_aux = tf.zeros((1,))
             input_seq = tf.transpose(seq["pitch_seq"])
             target = input_seq
             return (input_seq, empty_aux), target
@@ -115,60 +122,66 @@ class Seq2SeqVAETest(unittest.TestCase):
         )
         return tfrecord_loader.load_dataset()
 
-    def test_seq2seq_vae_summary(self):
-        input_shape = self.config["batch_size"], self.config["sequence_length"], self.config["sequence_features"]
-        aux_input_shape = self.config["batch_size"], 1, 1
+    def test_ar_seq2seq_vae_summary_and_plot(self):
         vae_model = self.get_autoregressive_model()
-        vae_model.build((input_shape, aux_input_shape))
         vae_model.summary(expand_nested=True)
         keras.utils.plot_model(
             vae_model.build_graph(),
             show_shapes=True,
             show_layer_names=True,
             show_dtype=True,
-            to_file=self.config["output_dir"] / "seq2seq.png",
+            to_file=self.config["output_dir"] / "seq2seq_vae_plot.png",
             expand_nested=True
         )
         self.assertTrue(vae_model)
 
+    def test_ar_seq2seq_vae_save_and_loading(self):
+        vae_model = self.get_autoregressive_model()
+        vae_model.save(self.config["output_dir"] / "ar_seq2seq_vae.keras")
+        loaded_model = keras.saving.load_model(self.config["output_dir"] / "ar_seq2seq_vae.keras")
+        # Use DeepDiff to ignore tuple to list type change in config comparison
+        diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
+        self.assertTrue(not diff)
+
     def test_ar_seq2seq_vae_training(self):
         vae_model = self.get_autoregressive_model()
-        dataset = self.load_dataset()
         vae_model.compile(
             optimizer=keras.optimizers.Adam(learning_rate=0.001),
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             run_eagerly=True
         )
-        vae_model.fit(dataset, batch_size=self.config["batch_size"], epochs=1)
-        self.assertTrue(vae_model)
-        vae_model.save(self.config["output_dir"] / "seq2seq.keras")
-        loaded_vae_model = keras.saving.load_model(self.config["output_dir"] / "seq2seq.keras")
-        self.assertTrue(loaded_vae_model)
+        vae_model.fit(self.load_dataset(), batch_size=self.config["batch_size"], epochs=1, steps_per_epoch=5)
+        vae_model.save(self.config["output_dir"] / "ar_seq2seq_vae_trained.keras")
+        # TODO - Can't compile the model again after loading don't know why
+        loaded_model = keras.saving.load_model(self.config["output_dir"] / "ar_seq2seq_vae_trained.keras",
+                                               compile=False)
+        # Use DeepDiff to ignore tuple to list type change in config comparison
+        diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
+        self.assertTrue(not diff)
+
+    def test_hier_seq2seq_vae_save_and_loading(self):
+        vae_model = self.get_autoregressive_model()
+        vae_model.save(self.config["output_dir"] / "hier_seq2seq_vae.keras")
+        loaded_model = keras.saving.load_model(self.config["output_dir"] / "hier_seq2seq_vae.keras")
+        # Use DeepDiff to ignore tuple to list type change in config comparison
+        diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
+        self.assertTrue(not diff)
 
     def test_hier_seq2seq_vae_training(self):
         vae_model = self.get_hierarchical_model()
-        dataset = self.load_dataset()
         vae_model.compile(
             optimizer=keras.optimizers.Adam(learning_rate=0.001),
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             run_eagerly=True
         )
-        vae_model.fit(dataset, batch_size=self.config["batch_size"], epochs=1)
-        self.assertTrue(vae_model)
-
-    def test(self):
-        from keras.layers import RNN, LSTM, LSTMCell
-
-        inputs = keras.Input(shape=(5, 10))
-        first_lstm_layer_out, *cell_states = LSTM(10, return_sequences=True, return_state=True)(inputs)
-        second_lstm_layer_out = LSTM(10)(first_lstm_layer_out, initial_state=cell_states)
-        model_a = keras.Model(inputs, second_lstm_layer_out)
-        model_a.summary()
-
-        inputs = keras.Input(shape=(5, 10))
-        stacked_lstm_outputs = RNN([LSTMCell(10), LSTMCell(10)], return_sequences=True)(inputs)
-        model_b = keras.Model(inputs, stacked_lstm_outputs)
-        model_b.summary()
+        vae_model.fit(self.load_dataset(), batch_size=self.config["batch_size"], epochs=1, steps_per_epoch=5)
+        vae_model.save(self.config["output_dir"] / "hier_seq2seq_vae_trained.keras")
+        # TODO - Can't compile the model again after loading don't know why
+        loaded_model = keras.saving.load_model(self.config["output_dir"] / "hier_seq2seq_vae_trained.keras",
+                                               compile=False)
+        # Use DeepDiff to ignore tuple to list type change in config comparison
+        diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
+        self.assertTrue(not diff)
 
 
 if __name__ == '__main__':

@@ -6,6 +6,7 @@ from ....utilities.distributions.divergence import BetaDivergenceRegularizer, Ga
 from ....utilities.distributions.inference import GaussianInference, GaussianReparametrizationTrick
 
 
+@keras.saving.register_keras_serializable(package="VAE", name="StandardVAE")
 class StandardVAE(VAE):
 
     def __init__(self,
@@ -19,6 +20,15 @@ class StandardVAE(VAE):
                  free_bits: float = 0.0,
                  name: str = "standard_vae",
                  **kwargs):
+        self._z_size = z_size
+        self._max_beta = max_beta
+        self._beta_rate = beta_rate
+        self._free_bits = free_bits
+        self._mean_inference_layer = mean_inference_layer
+        self._log_var_inference_layer = log_var_inference_layer
+        self.div_loss_tracker = keras.metrics.Mean(name=f"kl_loss")
+        self.div_bits_tracker = keras.metrics.Mean(name=f"kl_bits")
+        self.div_beta_tracker = keras.metrics.Mean(name=f"kl_beta")
         super(StandardVAE, self).__init__(
             input_processing_layer=input_processing_layer,
             generative_layer=generative_layer,
@@ -38,9 +48,7 @@ class StandardVAE(VAE):
             name=name,
             **kwargs
         )
-        self.div_loss_tracker = keras.metrics.Mean(name=f"kl_loss")
-        self.div_bits_tracker = keras.metrics.Mean(name=f"kl_bits")
-        self.div_beta_tracker = keras.metrics.Mean(name=f"kl_beta")
+
 
     @property
     def metrics(self):
@@ -62,8 +70,28 @@ class StandardVAE(VAE):
         
     def get_config(self):
         base_config = super().get_config()
-        return base_config
+        config = {
+            "z_size": self._z_size,
+            "max_beta": self._max_beta,
+            "beta_rate": self._beta_rate,
+            "free_bits": self._free_bits,
+            "input_processing_layer": keras.saving.serialize_keras_object(self._input_processing_layer),
+            "mean_inference_layer": keras.saving.serialize_keras_object(self._mean_inference_layer),
+            "log_var_inference_layer": keras.saving.serialize_keras_object(self._log_var_inference_layer),
+            "generative_layer": keras.saving.serialize_keras_object(self._generative_layer)
+        }
+        return {**base_config, **config}
 
     @classmethod
     def from_config(cls, config, custom_objects=None):
-        super().from_config(config, custom_objects)
+        input_processing_layer = keras.saving.deserialize_keras_object(config.pop("input_processing_layer"))
+        mean_inference_layer = keras.saving.deserialize_keras_object(config.pop("mean_inference_layer"))
+        log_var_inference_layer = keras.saving.deserialize_keras_object(config.pop("log_var_inference_layer"))
+        generative_layer = keras.saving.deserialize_keras_object(config.pop("generative_layer"))
+        return cls(
+            input_processing_layer=input_processing_layer,
+            mean_inference_layer=mean_inference_layer,
+            log_var_inference_layer=log_var_inference_layer,
+            generative_layer=generative_layer,
+            **config
+        )

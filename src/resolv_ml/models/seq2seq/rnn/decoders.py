@@ -138,7 +138,7 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
             "num_classes": self._num_classes,
             "rnn_cell": keras.saving.serialize_keras_object(self._rnn_cell),
             "output_projection": keras.saving.serialize_keras_object(self._output_projection),
-            "dropout": self._dropout,
+            "dropout": self._dropout
         }
         return {**base_config, **config}
 
