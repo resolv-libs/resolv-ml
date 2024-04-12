@@ -94,7 +94,7 @@ class TestHierarchicalRNNDecoder(unittest.TestCase):
         os.environ["KERAS_BACKEND"] = "tensorflow"
         self.config["output_dir"].mkdir(parents=True, exist_ok=True)
 
-    def get_decoder(self, build: bool = True):
+    def get_decoder(self):
         decoder = rnn_decoders.HierarchicalRNNDecoder(
             level_lengths=self.config["level_lengths"],
             core_decoder=rnn_decoders.RNNAutoregressiveDecoder(
@@ -106,10 +106,14 @@ class TestHierarchicalRNNDecoder(unittest.TestCase):
             dec_rnn_sizes=self.config["dec_rnn_sizes"],
             dropout=self.config["dropout"]
         )
-        if build:
-            input_shape = self.config["batch_size"], self.config["seq_length"], self.config["seq_features"]
-            decoder.build(input_shape)
+        decoder.build(self.get_decoder_input_shape())
         return decoder
+
+    def get_decoder_input_shape(self):
+        input_sequence_shape = self.config["batch_size"], self.config["seq_length"], self.config["seq_features"]
+        aux_input_shape = (1,)
+        z_shape = self.config["batch_size"], self.config["z_size"]
+        return input_sequence_shape, aux_input_shape, z_shape
 
     def get_input_data_sample(self):
         inputs = keras.ops.ones((self.config["batch_size"], self.config["seq_length"], self.config["seq_features"]))

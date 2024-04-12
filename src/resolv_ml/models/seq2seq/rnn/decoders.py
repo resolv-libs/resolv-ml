@@ -35,10 +35,9 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
         self._rnn_cell = rnn_cell
         self._output_projection = output_projection_layer
         self._dropout = dropout
-        self._stacked_rnn_cells = rnn_cell if rnn_cell else \
-            [rnn_layers.get_default_rnn_cell(size, dropout) for size in dec_rnn_sizes]
-        if len(dec_rnn_sizes) > 1 or (isinstance(rnn_cell, list) and len(rnn_cell) > 1):
-            self._stacked_rnn_cells = keras.layers.StackedRNNCells(self._stacked_rnn_cells)
+        self._stacked_rnn_cells = keras.layers.StackedRNNCells(
+            rnn_cell if rnn_cell else [rnn_layers.get_default_rnn_cell(size, dropout) for size in dec_rnn_sizes]
+        )
         self._initial_state_layer = rnn_layers.InitialRNNCellStateFromEmbedding(
             cell_state_sizes=self._stacked_rnn_cells.state_size,
             name="z_to_initial_state"
@@ -57,7 +56,8 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
             if not self._embedding_layer.built:
                 self._embedding_layer.build(embedding_layer_input_shape)
             self._output_depth = self._embedding_layer.compute_output_shape(embedding_layer_input_shape)[-1]
-        self._initial_state_layer.build(z_shape)
+        if not self._initial_state_layer.built:
+            self._initial_state_layer.build(z_shape)
         rnn_input_shape = batch_size, self._output_depth + z_shape[-1]
         self._stacked_rnn_cells.build(rnn_input_shape)
         output_projection_input_shape = batch_size, self._stacked_rnn_cells.output_size
@@ -173,15 +173,17 @@ class HierarchicalRNNDecoder(SequenceDecoder):
             **kwargs
         )
         self._level_lengths = level_lengths
-        self._num_levels = len(level_lengths) - 1  # subtract 1 for the core decoder level
         self._core_decoder = core_decoder
+        self._dec_rnn_sizes = dec_rnn_sizes
+        self._rnn_cell = rnn_cell
+        self._dropout = dropout
+        self._num_levels = len(level_lengths) - 1  # subtract 1 for the core decoder level
         self._hierarchical_initial_states: List[rnn_layers.InitialRNNCellStateFromEmbedding] = []
-        self._stacked_hierarchical_rnn_cells: List[keras.layers.RNN] = []
+        self._stacked_hierarchical_rnn_cells: List[keras.layers.StackedRNNCells] = []
         for level_idx in range(self._num_levels):
-            level_rnn_cells = rnn_cell if rnn_cell else \
-                [rnn_layers.get_default_rnn_cell(size, dropout) for size in dec_rnn_sizes]
-            if len(dec_rnn_sizes) > 1 or (isinstance(rnn_cell, list) and len(rnn_cell) > 1):
-                level_rnn_cells = keras.layers.StackedRNNCells(level_rnn_cells)
+            level_rnn_cells = keras.layers.StackedRNNCells(
+                rnn_cell if rnn_cell else [rnn_layers.get_default_rnn_cell(size, dropout) for size in dec_rnn_sizes]
+            )
             self._hierarchical_initial_states.append(
                 rnn_layers.InitialRNNCellStateFromEmbedding(
                     cell_state_sizes=level_rnn_cells.state_size,
@@ -191,15 +193,22 @@ class HierarchicalRNNDecoder(SequenceDecoder):
             self._stacked_hierarchical_rnn_cells.append(level_rnn_cells)
 
     def build(self, input_shape):
-        input_sequence_shape, _, z_shape = input_shape
-        super().build(input_sequence_shape)
-        batch_size, sequence_length, features_length = input_sequence_shape
+        super().build(input_shape)
+        input_sequence_shape, aux_input_shape, z_shape = input_shape
+        batch_size, sequence_length, sequence_features = input_sequence_shape
         # Check if given hierarchical level lengths are compatible with input sequence.
         level_lengths_prod = k_ops.prod(self._level_lengths)
         if sequence_length != level_lengths_prod:
             raise ValueError(f"The product of the HierarchicalLSTMDecoder level lengths {level_lengths_prod} must "
                              f"equal the input sequence length {sequence_length}.")
-        self._core_decoder.build(input_shape)
+        rnn_cells_input_shape = batch_size, 1
+        for layer in self._stacked_hierarchical_rnn_cells:
+            layer.build(rnn_cells_input_shape)
+        input_sequence_hier_shape = self._get_hierarchy_shape(input_sequence_shape)
+        core_decoder_input_seq_shape = input_sequence_hier_shape[self._num_levels:]
+        core_decoder_aux_input_shape = aux_input_shape
+        core_decoder_z_shape = batch_size, self._stacked_hierarchical_rnn_cells[-1].output_size
+        self._core_decoder.build((core_decoder_input_seq_shape, core_decoder_aux_input_shape, core_decoder_z_shape))
 
     def decode(self, input_sequence, aux_inputs, z, teacher_force_probability=0.0, **kwargs):
         def base_decode(embedding, path: List[int] = None):
@@ -231,6 +240,7 @@ class HierarchicalRNNDecoder(SequenceDecoder):
             if level == self._num_levels:
                 decoded_subsequence = base_fn(embedding, path)
                 decoded_sequence.append(decoded_subsequence)
+                return decoded_subsequence
             initial_state = self._hierarchical_initial_states[level](embedding, training=True)
             for idx in range(self._level_lengths[level]):
                 level_input = k_ops.zeros(shape=(batch_size, 1))
@@ -255,9 +265,32 @@ class HierarchicalRNNDecoder(SequenceDecoder):
             hierarchy_shape += [-1] + tensor_shape[2:]
         elif tensor_rank != 2:
             # We only expect rank-2 for lengths and rank-3 for sequences.
-            raise ValueError(f"Unexpected shape for tensor: {tensor}")
+            raise ValueError(f"Unexpected shape: {tensor_shape}")
         hierarchy_tensor = k_ops.reshape(tensor, hierarchy_shape)
         # Move the batch dimension to after the hierarchical dimensions.
         perm = list(range(len(hierarchy_shape)))
         perm.insert(self._num_levels, perm.pop(0))
         return k_ops.transpose(hierarchy_tensor, perm)
+
+    def _get_hierarchy_shape(self, tensor_shape):
+        tensor = k_ops.zeros(tensor_shape)
+        hier_tensor = self._reshape_to_hierarchy(tensor)
+        return hier_tensor.shape
+
+    def get_config(self):
+        base_config = super().get_config()
+        base_config.pop("embedding_layer")
+        config = {
+            "level_lengths": self._level_lengths,
+            "core_decoder": keras.saving.serialize_keras_object(self._core_decoder),
+            "dec_rnn_sizes": self._dec_rnn_sizes,
+            "rnn_cell": keras.saving.serialize_keras_object(self._rnn_cell),
+            "dropout": self._dropout
+        }
+        return {**base_config, **config}
+
+    @classmethod
+    def from_config(cls, config, custom_objects=None):
+        rnn_cell = keras.saving.deserialize_keras_object(config.pop("rnn_cell"))
+        core_decoder = keras.saving.deserialize_keras_object(config.pop("core_decoder"))
+        return cls(rnn_cell=rnn_cell, core_decoder=core_decoder, **config)
