@@ -13,13 +13,13 @@ from resolv_ml.models.dlvm.vae.vanilla_vae import StandardVAE
 from resolv_ml.models.seq2seq.rnn import encoders, decoders
 
 
-class Seq2SeqVAETest(unittest.TestCase):
+class Seq2SeqStandardVAETest(unittest.TestCase):
 
     @property
     def config(self):
         return {
             "input_dir": Path("./data"),
-            "output_dir": Path("./output/models/dlvm/vae"),
+            "output_dir": Path("./output/models/dlvm/vae/standard-vae/seq2seq"),
             "batch_size": 32,
             "sequence_length": 64,
             "sequence_features": 1,
@@ -124,9 +124,9 @@ class Seq2SeqVAETest(unittest.TestCase):
 
     def test_ar_seq2seq_vae_summary_and_plot(self):
         vae_model = self.get_autoregressive_model()
-        vae_model.summary(expand_nested=True)
+        vae_model.print_summary(self.get_input_shape(), expand_nested=True)
         keras.utils.plot_model(
-            vae_model.build_graph(),
+            vae_model.build_graph(self.get_input_shape()),
             show_shapes=True,
             show_layer_names=True,
             show_dtype=True,

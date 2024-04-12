@@ -47,14 +47,15 @@ class VAE(keras.Model):
     def call(self, inputs, training: bool = False, **kwargs):
         if training:
             vae_input, aux_input = inputs
+            iterations = self.optimizer.iterations + 1
             z, *posterior_dist_params = self.encode(inputs, training=training, **kwargs)
-            outputs = self.decode((vae_input, aux_input, z), training=training)
+            outputs = self.decode((vae_input, aux_input, z), training=training, iterations=iterations)
             regularization_losses = []
             if self._regularization_layers:
                 for regularization_layer in self._regularization_layers:
                     regularizer_inputs = vae_input, aux_input, posterior_dist_params, z, outputs
                     layer_reg_losses = regularization_layer(regularizer_inputs, training=training,
-                                                            iterations=self.optimizer.iterations + 1)
+                                                            iterations=iterations)
                     regularization_losses.append(layer_reg_losses)
                 self._add_regularization_losses(regularization_losses)
         else:
@@ -73,13 +74,14 @@ class VAE(keras.Model):
         if training:
             vae_input, aux_input, z = inputs
             return self._generative_layer((vae_input, aux_input, z), training=training,
-                                          iterations=self.optimizer.iterations + 1, **kwargs)
+                                          iterations=kwargs.pop('iterations', 1), **kwargs)
         else:
             z = inputs
             return self._generative_layer(z, training=training, **kwargs)
 
-    def summary(
+    def print_summary(
             self,
+            input_shape,
             line_length=None,
             positions=None,
             print_fn=None,
@@ -87,12 +89,13 @@ class VAE(keras.Model):
             show_trainable=False,
             layer_range=None
     ):
-        graph = self.build_graph()
+        graph = self.build_graph(input_shape)
         graph.summary(line_length, positions, print_fn, expand_nested, show_trainable, layer_range)
 
-    def build_graph(self):
-        vae_input = keras.Input(shape=(64, 1), name="vae_input")
-        vae_aux_input = keras.Input(shape=(64, 1), name="vae_aux_input")
-        z, *_ = self.encode((vae_input, vae_aux_input))
-        dec_outputs = self.decode((vae_input, vae_aux_input, z))
+    def build_graph(self, input_shape):
+        seq_input_shape, aux_input_shape = input_shape
+        vae_input = keras.Input(shape=seq_input_shape[1:], batch_size=seq_input_shape[0], name="vae_input")
+        vae_aux_input = keras.Input(shape=aux_input_shape[1:], batch_size=aux_input_shape[0], name="vae_aux_input")
+        z, *_ = self.encode((vae_input, vae_aux_input), training=True)
+        dec_outputs = self.decode((vae_input, vae_aux_input, z), training=True)
         return keras.Model(inputs=(vae_input, vae_aux_input), outputs=dec_outputs)

@@ -4,8 +4,17 @@ import keras.ops as k_ops
 
 
 def compute_pairwise_distance_matrix(x):
+    """
+    Computes the pairwise distance matrix for a 1D tensor.
+
+    Arguments:
+    x -- Tensor, shape (n,)
+
+    Returns:
+    distances -- Pairwise distances, shape (n, n)
+    """
     x_expanded = k_ops.expand_dims(x, 1)  # Expand dimensions to allow broadcasting
-    x_transposed = k_ops.transpose(x_expanded, axis=(0, 2, 1))
+    x_transposed = k_ops.transpose(x_expanded)
     distance_matrix = x_expanded - x_transposed  # Compute pairwise differences
     return distance_matrix
 

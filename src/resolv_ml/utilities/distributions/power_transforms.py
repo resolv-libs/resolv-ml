@@ -16,11 +16,9 @@ class PowerTransform(ABC, keras.Layer):
         self._lambda_init = lambda_init
         self._batch_normalization = batch_norm
 
-    @abstractmethod
     def transform(self, inputs):
         pass
 
-    @abstractmethod
     def inverse_transform(self, inputs):
         pass
 
@@ -36,7 +34,15 @@ class PowerTransform(ABC, keras.Layer):
         transformed = self.transform(inputs) if not inverse else self.inverse_transform(inputs)
         return transformed if not self._batch_normalization or inverse else self._batch_normalization(transformed)
 
+    def get_config(self):
+        base_config = super().get_config()
+        config = {
+            "batch_norm": keras.saving.serialize_keras_object(self._batch_normalization)
+        }
+        return {**base_config, **config}
 
+
+@keras.saving.register_keras_serializable(package="PowerTransform", name="BoxCox")
 class BoxCox(PowerTransform):
 
     def __init__(self,
@@ -60,7 +66,13 @@ class BoxCox(PowerTransform):
                           true_fn=lambda: k_ops.exp(inputs),
                           false_fn=lambda: k_ops.power(inputs * self.lmbda + 1, 1 / self.lmbda))
 
+    @classmethod
+    def from_config(cls, config, custom_objects=None):
+        batch_norm = keras.saving.deserialize_keras_object(config.pop("batch_norm"))
+        return cls(batch_norm=batch_norm, **config)
 
+
+@keras.saving.register_keras_serializable(package="PowerTransform", name="YeoJohnson")
 class YeoJohnson(PowerTransform):
 
     def __init__(self,
@@ -97,3 +109,8 @@ class YeoJohnson(PowerTransform):
         x_pos = k_ops.multiply(tensor, mask)
         x_neg = k_ops.multiply(tensor, k_ops.subtract(1, mask))
         return x_pos, x_neg
+
+    @classmethod
+    def from_config(cls, config, custom_objects=None):
+        batch_norm = keras.saving.deserialize_keras_object(config.pop("batch_norm"))
+        return cls(batch_norm=batch_norm, **config)
