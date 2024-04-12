@@ -13,6 +13,8 @@ class BetaDivergenceRegularizer(keras.Layer):
                  name: str = "beta_div",
                  **kwargs):
         super(BetaDivergenceRegularizer, self).__init__(name=name, **kwargs)
+        if not 0.0 <= beta_rate < 1.0:
+            raise ValueError("beta_rate must be between 0 and 1.")
         self._divergence_layer = divergence_layer
         self._free_bits = free_bits
         self._max_beta = max_beta
@@ -48,7 +50,7 @@ class BetaDivergenceRegularizer(keras.Layer):
     @classmethod
     def from_config(cls, config):
         divergence_layer = keras.saving.deserialize_keras_object(config.pop("divergence_layer"))
-        return cls(divergence_layer, **config)
+        return cls(divergence_layer=divergence_layer, **config)
 
 
 @keras.saving.register_keras_serializable(package="Divergences", name="GaussianKLD")
@@ -58,7 +60,10 @@ class GaussianKLDivergence(keras.Layer):
         super(GaussianKLDivergence, self).__init__(name=name, **kwargs)
 
     def call(self, inputs, training: bool = False, **kwargs):
-        p_mean, p_var, q_mean, q_var = tuple(inputs) + (0, 1)
+        if len(inputs) == 2:
+            p_mean, p_var, q_mean, q_var = tuple(inputs) + (0, 1)
+        else:
+            p_mean, p_var, q_mean, q_var = tuple(inputs)
         kl_loss = k_ops.sum(0.5 * (k_ops.log(p_var/q_var) + (k_ops.square(q_mean-p_mean) + q_var)/p_var - 1), axis=-1)
         return k_ops.mean(kl_loss)
 
