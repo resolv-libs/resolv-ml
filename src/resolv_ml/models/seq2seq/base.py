@@ -22,7 +22,8 @@ class SequenceEncoder(keras.Model):
         super().build(input_shape)
         if self._embedding_layer:
             input_shape = self._check_embedding_layer_input_shape(input_shape)
-            self._embedding_layer.build(input_shape)
+            if not self._embedding_layer.built:
+                self._embedding_layer.build(input_shape)
 
     def call(self, inputs, training: bool = False, **kwargs):
         embedded_seq = inputs
@@ -74,11 +75,6 @@ class SequenceDecoder(keras.Model):
     def sample(self, z, sampling_mode, **kwargs):
         raise NotImplementedError("SequenceDecoder.sample must be overridden by subclasses.")
 
-    def build(self, input_shape):
-        super().build(input_shape)
-        if self._embedding_layer:
-            self._embedding_layer.build(input_shape)
-
     def call(self, inputs, training: bool = False, **kwargs):
         if training:
             input_sequence, aux_inputs, z = inputs
@@ -105,16 +101,5 @@ class SequenceDecoder(keras.Model):
 
     @classmethod
     def from_config(cls, config, custom_objects=None):
-        embedding_layer = keras.layers.deserialize(config.pop("embedding_layer"))
+        embedding_layer = keras.saving.deserialize_keras_object(config.pop("embedding_layer"))
         return cls(embedding_layer=embedding_layer, **config)
-
-    def build_from_config(self, config):
-        # A sequence decoder behave differently in inference and training mode: having different inputs,
-        # it is not possible to build it from config, thus it is stateless.
-        pass
-
-    def _get_decoder_input_size(self, input_sequence_shape):
-        if self._embedding_layer:
-            return self._embedding_layer.compute_output_shape(input_sequence_shape)[-1]
-        else:
-            return input_sequence_shape[-1]

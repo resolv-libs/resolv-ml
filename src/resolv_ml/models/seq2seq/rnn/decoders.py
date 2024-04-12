@@ -1,6 +1,6 @@
 # TODO - DOC
 import random
-from typing import List, Any
+from typing import List, Any, Callable
 
 import keras
 import keras.ops as k_ops
@@ -17,7 +17,7 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
                  num_classes: int,
                  rnn_cell: Any = None,
                  output_projection_layer: keras.Layer = None,
-                 embedding_layer: keras.layers.Embedding = None,
+                 embedding_layer: keras.Layer = None,
                  dropout: float = 0.0,
                  sampling_schedule: str = "constant",
                  sampling_rate: float = 0.0,
@@ -45,13 +45,27 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
         )
 
     def build(self, input_shape):
-        input_sequence_shape, _, z_shape = input_shape
-        super().build(input_sequence_shape)
+        super().build(input_shape)
+        input_sequence_shape, aux_input_shape, z_shape = input_shape
+        batch_size, _, sequence_features = input_sequence_shape
+        self._output_depth = self._num_classes
+        if self._embedding_layer:
+            if isinstance(self._embedding_layer, keras.layers.Embedding) and sequence_features > 1:
+                raise ValueError(f"Can't use an Embedding layer if the sequence has more than one feature."
+                                 f"Please use a dense layer instead.")
+            embedding_layer_input_shape = (batch_size, sequence_features)
+            if not self._embedding_layer.built:
+                self._embedding_layer.build(embedding_layer_input_shape)
+            self._output_depth = self._embedding_layer.compute_output_shape(embedding_layer_input_shape)[-1]
+        self._initial_state_layer.build(z_shape)
+        rnn_input_shape = batch_size, self._output_depth + z_shape[-1]
+        self._stacked_rnn_cells.build(rnn_input_shape)
+        output_projection_input_shape = batch_size, self._stacked_rnn_cells.output_size
         if self._output_projection:
-            projection_layer_out_shape = self._output_projection.compute_output_shape(input_shape)
-            if projection_layer_out_shape != (input_sequence_shape[0], 1, self._num_classes):
+            projection_layer_out_shape = self._output_projection.compute_output_shape(output_projection_input_shape)
+            if projection_layer_out_shape != (batch_size, self._num_classes):
                 raise ValueError(f"Given projection layer output shape {projection_layer_out_shape} is not compatible "
-                                 f"with the decoder. Output shape must be (batch_size, 1, {self._num_classes}).")
+                                 f"with the decoder. Output shape must be (batch_size, {self._num_classes}).")
         else:
             self._output_projection = keras.layers.Dense(
                 units=self._num_classes,
@@ -61,11 +75,15 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
                 bias_initializer="zeros",
                 name="output_projection"
             )
+        # TODO - for Dense and Embedding layers need to check the built flag before calling. Otherwise build_from_config
+        #  does not work.
+        if not self._output_projection.built:
+            self._output_projection.build(output_projection_input_shape)
 
     def decode(self, input_sequence, aux_inputs, z, teacher_force_probability=0.0, **kwargs):
         batch_size, sequence_length, features_length = input_sequence.shape
         initial_state = self._initial_state_layer(z, training=True)
-        decoder_input = k_ops.zeros(shape=(batch_size, self._get_decoder_input_size(input_sequence.shape)))
+        decoder_input = k_ops.zeros(shape=(batch_size, self._output_depth))
         output_sequence_logits = []
         for i in range(sequence_length):
             decoder_input = k_ops.concatenate([decoder_input, z], axis=-1)
@@ -82,9 +100,11 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
         return k_ops.stack(output_sequence_logits, axis=1)
 
     def sample(self, z, sampling_mode, **kwargs):
+        batch_size = z.shape[0]
+        decoder_input = k_ops.zeros(shape=(batch_size, self._output_depth))
         initial_state = self._initial_state_layer(z, training=True)
         predicted_token, _, _ = self._predict_sequence_token(
-            rnn_input=z,
+            rnn_input=k_ops.concatenate([decoder_input, z], axis=-1),
             initial_state=initial_state,
             sampling_mode=sampling_mode,
             training=False,
@@ -107,7 +127,8 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
         return predicted_token, output_logits, output_state
 
     def compute_output_shape(self, input_shape):
-        batch_size = input_shape[0][0]
+        input_sequence_shape, aux_input_shape, z_shape = input_shape
+        batch_size = input_sequence_shape[0]
         return batch_size, None, None
 
     def get_config(self):
@@ -125,7 +146,11 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
     def from_config(cls, config, custom_objects=None):
         rnn_cell = keras.saving.deserialize_keras_object(config.pop("rnn_cell"))
         output_projection = keras.layers.deserialize(config.pop("output_projection"))
-        return cls(rnn_cell=rnn_cell, output_projection_layer=output_projection, **config)
+        embedding_layer = keras.layers.deserialize(config.pop("embedding_layer"))
+        return cls(rnn_cell=rnn_cell,
+                   output_projection_layer=output_projection,
+                   embedding_layer=embedding_layer,
+                   **config)
 
 
 @keras.saving.register_keras_serializable(package="SequenceDecoders", name="HierarchicalRNNDecoder")
@@ -176,41 +201,49 @@ class HierarchicalRNNDecoder(SequenceDecoder):
                              f"equal the input sequence length {sequence_length}.")
         self._core_decoder.build(input_shape)
 
-    def decode(self, input_sequence, aux_inputs, z, teacher_force_probability, **kwargs):
-
+    def decode(self, input_sequence, aux_inputs, z, teacher_force_probability=0.0, **kwargs):
         def base_decode(embedding, path: List[int] = None):
-            """Base function for hierarchical decoder."""
             base_input_sequence = hierarchy_input_sequence[path]
-            decoded_sequence = self._core_decoder.decode(
+            return self._core_decoder.decode(
                 input_sequence=base_input_sequence,
                 aux_inputs=aux_inputs,
                 z=embedding,
-                teacher_force_probability=teacher_force_probability
+                teacher_force_probability=teacher_force_probability,
+                **kwargs
             )
-            output_sequence.append(decoded_sequence)
 
+        hierarchy_input_sequence = self._reshape_to_hierarchy(input_sequence)
+        output_sequence = self._hierarchical_decode(z, base_fn=base_decode)
+        return k_ops.concatenate(output_sequence, axis=1)
+
+    def sample(self, z, sampling_mode, **kwargs):
+        def base_sample(embedding, _):
+            return self._core_decoder.sample(z=embedding, sampling_mode=sampling_mode, **kwargs)
+
+        output_sequence = self._hierarchical_decode(z, base_fn=base_sample)
+        return output_sequence[0]
+
+    def _hierarchical_decode(self, z, base_fn: Callable):
         def recursive_decode(embedding, path: List[int] = None):
             """Recursive hierarchical decode function."""
             path = path or []
             level = len(path)
             if level == self._num_levels:
-                return base_decode(embedding, path)
+                decoded_subsequence = base_fn(embedding, path)
+                decoded_sequence.append(decoded_subsequence)
             initial_state = self._hierarchical_initial_states[level](embedding, training=True)
-            level_input = k_ops.zeros(shape=(batch_size, self._get_decoder_input_size(input_sequence.shape)))
             for idx in range(self._level_lengths[level]):
+                level_input = k_ops.zeros(shape=(batch_size, 1))
                 output, initial_state = self._stacked_hierarchical_rnn_cells[level](level_input,
                                                                                     states=initial_state,
                                                                                     training=True)
                 recursive_decode(output, path + [idx])
 
-        batch_size = input_sequence.shape[0]
-        hierarchy_input_sequence = self._reshape_to_hierarchy(input_sequence)
-        output_sequence = []
+        batch_size = z.shape[0]
+        decoded_sequence = []
+        # This will populate decoded_sequence with all the decoded subsequences
         recursive_decode(z)
-        return k_ops.concatenate(output_sequence, axis=1)
-
-    def sample(self, z, sampling_mode, **kwargs):
-        pass
+        return decoded_sequence
 
     def _reshape_to_hierarchy(self, tensor):
         """Reshapes `tensor` so that its initial dimensions match the hierarchy."""

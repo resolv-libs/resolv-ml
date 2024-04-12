@@ -36,7 +36,7 @@ class RNNEncoder(SequenceEncoder):
     def build(self, input_shape):
         super().build(input_shape)
         input_shape = self._check_embedding_layer_input_shape(input_shape)
-        embedding_output_shape = self._embedding_layer.compute_output_shape(input_shape)
+        embedding_output_shape = self._embedding_layer.compute_output_shape(tuple(input_shape))
         self._stacked_rnn_cells.build(embedding_output_shape)
 
     def encode(self, inputs, training: bool = False, **kwargs):
@@ -65,8 +65,8 @@ class RNNEncoder(SequenceEncoder):
     @classmethod
     def from_config(cls, config, custom_objects=None):
         rnn_cell = keras.saving.deserialize_keras_object(config.pop("rnn_cell"))
-        return cls(rnn_cell=rnn_cell, **config)
-
+        embedding_layer = keras.layers.deserialize(config.pop("embedding_layer"))
+        return cls(rnn_cell=rnn_cell, embedding_layer=embedding_layer, **config)
 
 @keras.saving.register_keras_serializable(package="SequenceEncoders", name="BidirectionalRNNEncoder")
 class BidirectionalRNNEncoder(SequenceEncoder):
@@ -94,7 +94,7 @@ class BidirectionalRNNEncoder(SequenceEncoder):
     def build(self, input_shape):
         super().build(input_shape)
         input_shape = self._check_embedding_layer_input_shape(input_shape)
-        embedding_output_shape = self._embedding_layer.compute_output_shape(input_shape)
+        embedding_output_shape = self._embedding_layer.compute_output_shape(tuple(input_shape))
         self._stacked_bidirectional_rnn_layers.build(embedding_output_shape)
 
     def encode(self, inputs, training: bool = False, **kwargs):
@@ -121,4 +121,5 @@ class BidirectionalRNNEncoder(SequenceEncoder):
     @classmethod
     def from_config(cls, config, custom_objects=None):
         rnn_cell = keras.saving.deserialize_keras_object(config.pop("rnn_cell"))
-        return cls(rnn_cell=rnn_cell, **config)
+        embedding_layer = keras.layers.deserialize(config.pop("embedding_layer"))
+        return cls(rnn_cell=rnn_cell, embedding_layer=embedding_layer, **config)
