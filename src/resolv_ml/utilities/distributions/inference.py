@@ -15,12 +15,15 @@ class GaussianInference(keras.Layer):
                  name: str = "gaussian_inference",
                  **kwargs):
         super(GaussianInference, self).__init__(name=name, **kwargs)
+        self._z_size = z_size
         self._mean_layer = mean_layer if mean_layer else self.default_mean_layer(z_size)
         self._log_var_layer = log_var_layer if log_var_layer else self.default_log_var_layer(z_size)
 
     def build(self, input_shape):
-        self._mean_layer.build(input_shape)
-        self._log_var_layer.build(input_shape)
+        if not self._mean_layer.built:
+            self._mean_layer.build(input_shape)
+        if not self._log_var_layer.built:
+            self._log_var_layer.build(input_shape)
 
     def call(self, inputs: Any, training: bool = False, **kwargs):
         z_mean = self._mean_layer(inputs)
@@ -55,8 +58,9 @@ class GaussianInference(keras.Layer):
     def get_config(self):
         base_config = super().get_config()
         config = {
+            "z_size": self._z_size,
             "mean_layer": keras.saving.serialize_keras_object(self._mean_layer),
-            "log_var_layer": keras.saving.serialize_keras_object(self._mean_layer),
+            "log_var_layer": keras.saving.serialize_keras_object(self._log_var_layer),
         }
         return {**base_config, **config}
 
@@ -64,7 +68,7 @@ class GaussianInference(keras.Layer):
     def from_config(cls, config):
         mean_layer = keras.saving.deserialize_keras_object(config.pop("mean_layer"))
         log_var_layer = keras.saving.deserialize_keras_object(config.pop("log_var_layer"))
-        return cls(mean_layer, log_var_layer, **config)
+        return cls(mean_layer=mean_layer, log_var_layer=log_var_layer, **config)
 
 
 @keras.saving.register_keras_serializable(package="Inference", name="GaussianReparametrizationTrick")
@@ -75,10 +79,10 @@ class GaussianReparametrizationTrick(keras.Layer):
         self._z_size = z_size
 
     def compute_output_shape(self, input_shape, **kwargs):
-        return input_shape[0][0]
+        return input_shape[0]
 
     def call(self, inputs, training: bool = False, **kwargs):
-        (z_mean, z_var), aux_inputs = inputs
+        z_mean, z_var, _ = inputs
         epsilon = keras.random.normal(shape=k_ops.shape(z_mean), mean=0.0, stddev=1.0)
         z = z_mean + k_ops.sqrt(z_var) * epsilon
         return z
