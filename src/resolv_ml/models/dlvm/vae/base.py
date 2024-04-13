@@ -44,7 +44,7 @@ class VAE(keras.Model):
         for layer in self._regularization_layers:
             layer.build(input_shape)
 
-    def call(self, inputs, training: bool = False, **kwargs):
+    def call(self, inputs, training: bool = True, **kwargs):
         if training:
             vae_input, aux_input = inputs
             iterations = self.optimizer.iterations + 1
@@ -59,8 +59,7 @@ class VAE(keras.Model):
                     regularization_losses.append(layer_reg_losses)
                 self._add_regularization_losses(regularization_losses)
         else:
-            z = inputs
-            outputs = self.decode(z, training=training, **kwargs)
+            outputs = self.decode(inputs, training=training, **kwargs)
         return outputs
 
     def encode(self, inputs, training: bool = False, **kwargs):
@@ -78,6 +77,10 @@ class VAE(keras.Model):
         else:
             z = inputs
             return self._generative_layer(z, training=training, **kwargs)
+
+    def test_step(self, data):
+        self._call_has_training_arg = False
+        return super().test_step(data)
 
     def print_summary(
             self,

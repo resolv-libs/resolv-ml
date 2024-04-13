@@ -100,7 +100,7 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
         model.build(self.get_input_shape())
         return model
 
-    def load_dataset(self) -> tf.data.TFRecordDataset:
+    def load_dataset(self, name: str) -> tf.data.TFRecordDataset:
         def map_fn(_, seq):
             empty_aux = tf.zeros((1,))
             input_seq = tf.transpose(seq["pitch_seq"])
@@ -109,7 +109,7 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
 
         representation = PitchSequenceRepresentation(sequence_length=self.config["sequence_length"])
         tfrecord_loader = TFRecordLoader(
-            file_pattern=f"{self.config['input_dir']}/pitchseq.tfrecord",
+            file_pattern=f"{self.config['input_dir']}/{name}.tfrecord",
             parse_fn=functools.partial(
                 representation.parse_example,
                 parse_sequence_feature=True
@@ -148,9 +148,16 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
         vae_model.compile(
             optimizer=keras.optimizers.Adam(learning_rate=0.001),
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            metrics=[keras.metrics.SparseCategoricalAccuracy(), keras.metrics.SparseTopKCategoricalAccuracy()],
             run_eagerly=True
         )
-        vae_model.fit(self.load_dataset(), batch_size=self.config["batch_size"], epochs=1, steps_per_epoch=5)
+        vae_model.fit(
+            self.load_dataset("train_pitchseq"),
+            validation_data=self.load_dataset("validation_pitchseq"),
+            batch_size=self.config["batch_size"],
+            epochs=1,
+            steps_per_epoch=5
+        )
         vae_model.save(self.config["output_dir"] / "ar_seq2seq_vae_trained.keras")
         # TODO - Can't compile the model again after loading don't know why
         loaded_model = keras.saving.load_model(self.config["output_dir"] / "ar_seq2seq_vae_trained.keras",
@@ -174,7 +181,13 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             run_eagerly=True
         )
-        vae_model.fit(self.load_dataset(), batch_size=self.config["batch_size"], epochs=1, steps_per_epoch=5)
+        vae_model.fit(
+            self.load_dataset("train_pitchseq"),
+            validation_data=self.load_dataset("validation_pitchseq"),
+            batch_size=self.config["batch_size"],
+            epochs=1,
+            steps_per_epoch=5
+        )
         vae_model.save(self.config["output_dir"] / "hier_seq2seq_vae_trained.keras")
         # TODO - Can't compile the model again after loading don't know why
         loaded_model = keras.saving.load_model(self.config["output_dir"] / "hier_seq2seq_vae_trained.keras",
