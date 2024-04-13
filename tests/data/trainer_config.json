@@ -1,0 +1,93 @@
+{
+  "compile": {
+    "optimizer": {
+      "class_name": "adam",
+      "learning_rate": 0.001,
+      "beta_1": 0.9,
+      "beta_2": 0.999,
+      "epsilon": 1e-7,
+      "amsgrad": false,
+      "weight_decay": null,
+      "clipnorm": null,
+      "clipvalue": null,
+      "global_clipnorm": null,
+      "use_ema": false,
+      "ema_momentum": 0.99,
+      "ema_overwrite_frequency": null
+    },
+    "loss_weights": null,
+    "run_eagerly": true,
+    "steps_per_execution": 1,
+    "jit_compile": "auto",
+    "auto_scale_loss": true
+  },
+  "fit": {
+    "batch_size": 32,
+    "epochs": 1,
+    "verbose": "auto",
+    "shuffle": true,
+    "initial_epoch": 0,
+    "steps_per_epoch": 5,
+    "validation_steps": null,
+    "validation_batch_size": null,
+    "validation_freq": 1
+  },
+  "callbacks": {
+    "model_checkpoint": {
+      "filepath": "./output/trainer/checkpoints/{epoch:02d}-{loss:.2f}.keras",
+      "monitor": "loss",
+      "verbose": 0,
+      "save_best_only": false,
+      "save_weights_only": false,
+      "mode": "auto",
+      "save_freq": "epoch",
+      "initial_value_threshold": null
+    },
+    "backup_and_restore": {
+      "backup_dir": "./output/trainer/logs/backup",
+      "save_freq": "epoch",
+      "delete_checkpoint": true
+    },
+    "tensorboard": {
+      "log_dir": "./output/trainer/logs",
+      "histogram_freq": 0,
+      "write_graph": true,
+      "write_images": false,
+      "write_steps_per_second": false,
+      "update_freq": "epoch",
+      "profile_batch": 0,
+      "embeddings_freq": 0,
+      "embeddings_metadata": null
+    },
+    "early_stopping": {
+      "monitor": "loss",
+      "min_delta": 0,
+      "patience": 0,
+      "verbose": 0,
+      "mode": "auto",
+      "baseline": null,
+      "restore_best_weights": false,
+      "start_from_epoch": 0
+    },
+    "reduce_lr_on_plateau": {
+      "monitor": "loss",
+      "factor": 0.1,
+      "patience": 10,
+      "verbose": 0,
+      "mode": "auto",
+      "min_delta": 0.0001,
+      "cooldown": 0,
+      "min_lr": 0.0
+    },
+    "terminate_on_nan": false,
+    "csv_logger": {
+      "filename": "./output/trainer/logs/training_csv.log",
+      "separator": ",",
+      "append": false
+    },
+    "progbar_logger": false,
+    "swap_ema_weights": {
+      "swap_on_epoch": false
+    }
+  }
+}
