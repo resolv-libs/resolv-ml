@@ -49,7 +49,7 @@ class TestTrainer(unittest.TestCase):
             free_bits=0.0
         )
 
-    def load_dataset(self) -> tf.data.TFRecordDataset:
+    def load_dataset(self, name: str) -> tf.data.TFRecordDataset:
         def map_fn(_, seq):
             empty_aux = tf.zeros((1,))
             input_seq = tf.transpose(seq["pitch_seq"])
@@ -58,7 +58,7 @@ class TestTrainer(unittest.TestCase):
 
         representation = PitchSequenceRepresentation(sequence_length=64)
         tfrecord_loader = TFRecordLoader(
-            file_pattern=f"{self.input_dir}/*.tfrecord",
+            file_pattern=f"{self.input_dir}/{name}.tfrecord",
             parse_fn=functools.partial(
                 representation.parse_example,
                 parse_sequence_feature=True
@@ -73,12 +73,12 @@ class TestTrainer(unittest.TestCase):
 
     def test_trainer(self):
         vae_model = self.get_model()
-        trainer = Trainer(vae_model, config_file_path=self.input_dir/"trainer_config.json")
+        trainer = Trainer(vae_model, config_file_path=self.input_dir / "trainer_config.json")
         trainer.compile(
             loss=losses.SparseCategoricalCrossentropy(from_logits=True),
             metrics=[metrics.SparseCategoricalAccuracy(), metrics.SparseTopKCategoricalAccuracy()]
         )
-        trainer.train(train_data=self.load_dataset())
+        trainer.train(self.load_dataset("train_pitchseq"), validation_data=self.load_dataset("validation_pitchseq"))
 
 
 if __name__ == '__main__':

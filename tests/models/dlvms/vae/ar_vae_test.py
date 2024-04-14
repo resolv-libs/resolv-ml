@@ -90,7 +90,7 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
 
         representation = PitchSequenceRepresentation(sequence_length=self.config["sequence_length"])
         tfrecord_loader = TFRecordLoader(
-            file_pattern=f"{self.config['input_dir']}/pitchseq.tfrecord",
+            file_pattern=f"{self.config['input_dir']}/train_pitchseq.tfrecord",
             parse_fn=functools.partial(
                 representation.parse_example,
                 parse_sequence_feature=True,

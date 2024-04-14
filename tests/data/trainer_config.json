@@ -85,9 +85,6 @@
       "separator": ",",
       "append": false
     },
-    "progbar_logger": false,
-    "swap_ema_weights": {
-      "swap_on_epoch": false
-    }
+    "progbar_logger": false
   }
 }
