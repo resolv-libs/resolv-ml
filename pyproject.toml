@@ -42,7 +42,7 @@ keras = {git = "https://git@github.com/keras-team/keras.git", rev = "master"}
 [tool.poetry.group.test.dependencies]
 matplotlib = "*"
 deepdiff = "*"
-resolv-pipelines = {git = "ssh://git@github.com/resolv-libs/resolv-pipelines.git", rev = "main"}
+resolv-pipelines = { git = "ssh://git@github.com/resolv-libs/resolv-pipelines.git", rev = "main", extras = ["tensorflow"]}
 
 [tool.poetry.group.docs.dependencies]
 
