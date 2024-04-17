@@ -29,9 +29,10 @@ class AttributeRegularizationLayer(keras.Layer):
         raise NotImplementedError("_compute_attribute_regularization_loss must be implemented by subclasses.")
     
     def build(self, input_shape):
-        super().build(input_shape)
+        vae_input_shape, aux_input_shape = input_shape
+        super().build(aux_input_shape)
         if self._batch_normalization and not self._batch_normalization.built:
-            self._batch_normalization.build(input_shape)
+            self._batch_normalization.build(aux_input_shape)
     
     def call(self, inputs, training: bool = False, **kwargs):
         _, attributes, _, z, _ = inputs
