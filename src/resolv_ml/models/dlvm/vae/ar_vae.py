@@ -27,7 +27,12 @@ class AttributeRegularizationLayer(keras.Layer):
 
     def _compute_attribute_regularization_loss(self, latent_codes, attributes, training: bool = False):
         raise NotImplementedError("_compute_attribute_regularization_loss must be implemented by subclasses.")
-
+    
+    def build(self, input_shape):
+        super().build(input_shape)
+        if self._batch_normalization and not self._batch_normalization.built:
+            self._batch_normalization.build(input_shape)
+    
     def call(self, inputs, training: bool = False, **kwargs):
         _, attributes, _, z, _ = inputs
         latent_dimension = z[:, self._regularization_dimension]
@@ -164,6 +169,7 @@ class PowerTransformAttributeRegularization(AttributeRegularizationLayer):
         return self._loss_fn(latent_codes, attributes)
 
     def build(self, input_shape):
+        super().build(input_shape)
         if not self._power_transform.built:
             self._power_transform.build(input_shape)
 

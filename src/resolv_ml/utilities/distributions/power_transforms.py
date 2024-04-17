@@ -1,9 +1,10 @@
 # TODO - DOC
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Tuple
 
 import keras
 import keras.ops as k_ops
+import math
 
 
 class PowerTransform(ABC, keras.Layer):
@@ -22,7 +23,6 @@ class PowerTransform(ABC, keras.Layer):
     def inverse_transform(self, inputs):
         pass
 
-    # noinspection PyAttributeOutsideInit
     def build(self, input_shape: Tuple[int, ...]):
         self.lmbda = self.add_weight(
             initializer=keras.initializers.Constant(self._lambda_init),
@@ -49,6 +49,8 @@ class BoxCox(PowerTransform):
                  lambda_init: float = 1.0,
                  batch_norm: keras.layers.BatchNormalization = None,
                  name: str = "box_cox", **kwargs):
+        # Set lambda to epsilon if initial value is zero to avoid null gradients
+        lambda_init = keras.config.epsilon() if math.isclose(lambda_init, 0.0) else lambda_init
         super(BoxCox, self).__init__(lambda_init=lambda_init, batch_norm=batch_norm, name=name, **kwargs)
 
     def transform(self, inputs):

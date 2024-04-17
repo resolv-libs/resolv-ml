@@ -160,7 +160,7 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
     def test_training_power_transform_regularization_box_cox(self):
         vae_model = self.get_hierarchical_model(
             attribute_regularization_layer=PowerTransformAttributeRegularization(
-                power_transform=BoxCox(batch_norm=keras.layers.BatchNormalization()))
+                power_transform=BoxCox(lambda_init=0.0, batch_norm=keras.layers.BatchNormalization()))
         )
         vae_model.compile(
             optimizer=keras.optimizers.Adam(learning_rate=0.001),
