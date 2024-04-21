@@ -23,6 +23,10 @@ class Trainer:
         else:
             self._output_dir = ""
 
+    @property
+    def config(self):
+        return self._config
+
     def train(self,
               train_data,
               validation_data=None,
@@ -48,7 +52,10 @@ class Trainer:
     def compile(self,
                 loss=None,
                 metrics=None,
-                weighted_metrics=None) -> keras.Model:
+                weighted_metrics=None,
+                lr_schedule: Callable = None) -> keras.Model:
+        if lr_schedule:
+            self._config['compile']['optimizer']['learning_rate'] = lr_schedule
         self._model.compile(loss=loss, metrics=metrics, weighted_metrics=weighted_metrics, **self._config['compile'])
         return self._model
 

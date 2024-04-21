@@ -40,7 +40,7 @@ class TestTrainer(unittest.TestCase):
         aux_input_shape = (32,)
         return input_seq_shape, aux_input_shape
 
-    def get_hierarchical_model(self, attribute_regularization_layer=DefaultAttributeRegularization())\
+    def get_hierarchical_model(self, attribute_regularization_layer=DefaultAttributeRegularization()) \
             -> AttributeRegularizedVAE:
         model = AttributeRegularizedVAE(
             z_size=128,
@@ -100,7 +100,12 @@ class TestTrainer(unittest.TestCase):
                     losses.SparseCategoricalCrossentropy(from_logits=True),
                     metrics.SparseCategoricalAccuracy(),
                     metrics.SparseTopKCategoricalAccuracy()
-                ]
+                ],
+                lr_schedule=keras.optimizers.schedules.ExponentialDecay(
+                    initial_learning_rate=0.001,
+                    decay_steps=10000,
+                    decay_rate=0.99
+                )
             )
             trainer.train(
                 train_data=self.load_dataset("train_pitchseq"),
