@@ -1,4 +1,8 @@
 {
+  "output_dir": {
+    "path": "./output/trainer/runs",
+    "timestamp_format": "%Y%m%d-%H%M%S"
+  },
   "compile": {
     "optimizer": {
       "class_name": "adam",
@@ -34,7 +38,7 @@
   },
   "callbacks": {
     "model_checkpoint": {
-      "filepath": "./output/trainer/checkpoints/epoch_{epoch:02d}-val_loss_{val_loss:.2f}.keras",
+      "filepath": "checkpoints/epoch_{epoch:02d}-val_loss_{val_loss:.2f}.keras",
       "monitor": "val_loss",
       "verbose": 1,
       "save_best_only": true,
@@ -44,7 +48,7 @@
       "initial_value_threshold": null
     },
     "tensorboard": {
-      "log_dir": "./output/trainer/tensorboard",
+      "log_dir": "tensorboard",
       "histogram_freq": 1,
       "write_graph": true,
       "write_images": false,
@@ -56,7 +60,7 @@
     },
     "terminate_on_nan": true,
     "csv_logger": {
-      "filename": "./output/trainer/training_log.csv",
+      "filename": "training_log.csv",
       "separator": ",",
       "append": false
     }

@@ -1,5 +1,6 @@
 # TODO - DOC
 import json
+import time
 from pathlib import Path
 from typing import Union, Callable, Dict
 
@@ -13,6 +14,14 @@ class Trainer:
         with open(config_file_path) as file:
             self._config = json.load(file)
         self._model = model
+        if "output_dir" in self._config:
+            output_dir_config = self._config['output_dir']
+            self._output_dir = output_dir_config.get("path", "./")
+            if "timestamp_format" in output_dir_config:
+                timestamp = time.strftime(output_dir_config["timestamp_format"])
+                self._output_dir += f'/{timestamp}'
+        else:
+            self._output_dir = ""
 
     def train(self,
               train_data,
@@ -50,14 +59,21 @@ class Trainer:
                        lambda_callbacks: Dict[str, Callable] = None):
         training_callbacks = custom_callbacks or []
         callbacks_config = self._config['callbacks']
+
         if "model_checkpoint" in callbacks_config:
-            model_checkpoint = callbacks.ModelCheckpoint(**callbacks_config["model_checkpoint"])
+            config = callbacks_config["model_checkpoint"]
+            config["filepath"] = f'{self._output_dir}/{config["filepath"]}'
+            model_checkpoint = callbacks.ModelCheckpoint(**config)
             training_callbacks.append(model_checkpoint)
         if "backup_and_restore" in callbacks_config:
-            backup_and_restore = callbacks.BackupAndRestore(**callbacks_config["backup_and_restore"])
+            config = callbacks_config["backup_and_restore"]
+            config["backup_dir"] = f'{self._output_dir}/{config["backup_dir"]}'
+            backup_and_restore = callbacks.BackupAndRestore(**config)
             training_callbacks.append(backup_and_restore)
         if "tensorboard" in callbacks_config:
-            tensorboard = callbacks.TensorBoard(**callbacks_config["tensorboard"])
+            config = callbacks_config["tensorboard"]
+            config["log_dir"] = f'{self._output_dir}/{config["log_dir"]}'
+            tensorboard = callbacks.TensorBoard(**config)
             training_callbacks.append(tensorboard)
         if "early_stopping" in callbacks_config:
             early_stopping = callbacks.EarlyStopping(**callbacks_config["early_stopping"])
@@ -77,7 +93,9 @@ class Trainer:
         if callbacks_config.get("terminate_on_nan", False):
             training_callbacks.append(callbacks.TerminateOnNaN())
         if "csv_logger" in callbacks_config:
-            csv_logger = callbacks.CSVLogger(**callbacks_config["csv_logger"])
+            config = callbacks_config["csv_logger"]
+            config["filename"] = f'{self._output_dir}/{config["filename"]}'
+            csv_logger = callbacks.CSVLogger(**config)
             training_callbacks.append(csv_logger)
         if callbacks_config.get("progbar_logger", False):
             training_callbacks.append(callbacks.ProgbarLogger())
