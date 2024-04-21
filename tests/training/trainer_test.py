@@ -96,9 +96,16 @@ class TestTrainer(unittest.TestCase):
             trainer = Trainer(vae_model, config_file_path=self.input_dir / "trainer_config.json")
             trainer.compile(
                 loss=losses.SparseCategoricalCrossentropy(from_logits=True),
-                metrics=[metrics.SparseCategoricalAccuracy(), metrics.SparseTopKCategoricalAccuracy()]
+                metrics=[
+                    losses.SparseCategoricalCrossentropy(from_logits=True),
+                    metrics.SparseCategoricalAccuracy(),
+                    metrics.SparseTopKCategoricalAccuracy()
+                ]
             )
-            trainer.train(self.load_dataset("train_pitchseq"), validation_data=self.load_dataset("validation_pitchseq"))
+            trainer.train(
+                train_data=self.load_dataset("train_pitchseq"),
+                validation_data=self.load_dataset("validation_pitchseq")
+            )
 
 
 if __name__ == '__main__':

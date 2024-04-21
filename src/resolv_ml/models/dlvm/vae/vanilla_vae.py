@@ -49,15 +49,6 @@ class StandardVAE(VAE):
             **kwargs
         )
 
-
-    @property
-    def metrics(self):
-        return super().metrics + [
-            self.div_loss_tracker,
-            self.div_bits_tracker,
-            self.div_beta_tracker
-        ]
-
     def build(self, input_shape):
         super().build(input_shape)
 

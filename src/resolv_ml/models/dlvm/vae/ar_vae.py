@@ -221,10 +221,6 @@ class AttributeRegularizedVAE(StandardVAE):
         )
         self._regularization_layers.append(attribute_regularization_layer)
 
-    @property
-    def metrics(self):
-        return super().metrics + [self._attr_reg_loss_tracker]
-
     def _add_regularization_losses(self, regularization_losses):
         super()._add_regularization_losses(regularization_losses)
         attr_reg_loss = regularization_losses[1]

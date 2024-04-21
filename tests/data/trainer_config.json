@@ -23,68 +23,42 @@
   },
   "fit": {
     "batch_size": 32,
-    "epochs": 1,
+    "epochs": 2,
     "verbose": "auto",
-    "shuffle": true,
+    "shuffle": false,
     "initial_epoch": 0,
-    "steps_per_epoch": 5,
+    "steps_per_epoch": 10,
     "validation_steps": null,
     "validation_batch_size": null,
     "validation_freq": 1
   },
   "callbacks": {
     "model_checkpoint": {
-      "filepath": "./output/trainer/checkpoints/{epoch:02d}-{loss:.2f}.keras",
-      "monitor": "loss",
-      "verbose": 0,
-      "save_best_only": false,
+      "filepath": "./output/trainer/checkpoints/epoch_{epoch:02d}-val_loss_{val_loss:.2f}.keras",
+      "monitor": "val_loss",
+      "verbose": 1,
+      "save_best_only": true,
       "save_weights_only": false,
       "mode": "auto",
       "save_freq": "epoch",
       "initial_value_threshold": null
     },
-    "backup_and_restore": {
-      "backup_dir": "./output/trainer/logs/backup",
-      "save_freq": "epoch",
-      "delete_checkpoint": true
-    },
     "tensorboard": {
-      "log_dir": "./output/trainer/logs",
-      "histogram_freq": 0,
+      "log_dir": "./output/trainer/tensorboard",
+      "histogram_freq": 1,
       "write_graph": true,
       "write_images": false,
       "write_steps_per_second": false,
       "update_freq": "epoch",
-      "profile_batch": 0,
+      "profile_batch": [500,520],
       "embeddings_freq": 0,
       "embeddings_metadata": null
     },
-    "early_stopping": {
-      "monitor": "loss",
-      "min_delta": 0,
-      "patience": 0,
-      "verbose": 0,
-      "mode": "auto",
-      "baseline": null,
-      "restore_best_weights": false,
-      "start_from_epoch": 0
-    },
-    "reduce_lr_on_plateau": {
-      "monitor": "loss",
-      "factor": 0.1,
-      "patience": 10,
-      "verbose": 0,
-      "mode": "auto",
-      "min_delta": 0.0001,
-      "cooldown": 0,
-      "min_lr": 0.0
-    },
-    "terminate_on_nan": false,
+    "terminate_on_nan": true,
     "csv_logger": {
-      "filename": "./output/trainer/logs/training_csv.log",
+      "filename": "./output/trainer/training_log.csv",
       "separator": ",",
       "append": false
-    },
-    "progbar_logger": false
+    }
   }
 }

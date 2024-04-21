@@ -17,7 +17,6 @@ class Trainer:
     def train(self,
               train_data,
               validation_data=None,
-              validation_split=0.0,
               class_weight=None,
               sample_weight=None,
               custom_callbacks: callbacks.Callback = None,
@@ -26,10 +25,10 @@ class Trainer:
               lambda_callbacks: Dict[str, Callable] = None):
         if not self._model.compiled:
             raise ValueError("Model is not compiled. Please call compile() before training.")
+
         history = self._model.fit(
             train_data,
             callbacks=self._get_callbacks(custom_callbacks, lr_schedule, lr_scheduler_verbose, lambda_callbacks),
-            validation_split=validation_split,
             validation_data=validation_data,
             class_weight=class_weight,
             sample_weight=sample_weight,
@@ -49,7 +48,7 @@ class Trainer:
                        lr_schedule: Callable = None,
                        lr_scheduler_verbose: int = 0,
                        lambda_callbacks: Dict[str, Callable] = None):
-        training_callbacks = custom_callbacks if custom_callbacks else []
+        training_callbacks = custom_callbacks or []
         callbacks_config = self._config['callbacks']
         if "model_checkpoint" in callbacks_config:
             model_checkpoint = callbacks.ModelCheckpoint(**callbacks_config["model_checkpoint"])
