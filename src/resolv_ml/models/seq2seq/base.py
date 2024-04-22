@@ -69,7 +69,7 @@ class SequenceDecoder(keras.Model):
         self._sampling_schedule = sampling_schedule
         self._sampling_rate = sampling_rate
 
-    def decode(self, input_sequence, aux_inputs, z, teacher_force_probability=0.0, **kwargs):
+    def decode(self, input_sequence, aux_inputs, z, sampling_probability=1.0, **kwargs):
         raise NotImplementedError("SequenceDecoder.decode must be overridden by subclasses.")
 
     def sample(self, z, sampling_mode, **kwargs):
@@ -78,13 +78,13 @@ class SequenceDecoder(keras.Model):
     def call(self, inputs, training: bool = False, **kwargs):
         if training:
             input_sequence, aux_inputs, z = inputs
-            teacher_force_probability = training_helper.get_sampling_probability(
+            sampling_probability = training_helper.get_sampling_probability(
                 sampling_schedule=self._sampling_schedule,
                 sampling_rate=self._sampling_rate,
                 step=kwargs.get("iterations", 0),
                 training=training
             )
-            return self.decode(input_sequence, aux_inputs, z, teacher_force_probability, **kwargs)
+            return self.decode(input_sequence, aux_inputs, z, sampling_probability, **kwargs)
         else:
             z = inputs
             sampling_mode = kwargs.get("sampling_mode", "argmax")

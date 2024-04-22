@@ -6,7 +6,7 @@ def get_sampling_probability(step: int,
                              sampling_rate: float = 0.0,
                              training: bool = False) -> float:
     if sampling_schedule == 'constant' and sampling_rate == 0 or not training:
-        return 0.0
+        return 1.0
     if sampling_schedule == 'constant':
         if not 0 <= sampling_rate <= 1:
             raise ValueError(f'`constant` sampling rate must be in the interval [0, 1]. Got {sampling_schedule}.')

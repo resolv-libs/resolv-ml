@@ -80,7 +80,7 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
         if not self._output_projection.built:
             self._output_projection.build(output_projection_input_shape)
 
-    def decode(self, input_sequence, aux_inputs, z, teacher_force_probability=0.0, **kwargs):
+    def decode(self, input_sequence, aux_inputs, z, sampling_probability=1.0, **kwargs):
         batch_size, sequence_length, features_length = input_sequence.shape
         initial_state = self._initial_state_layer(z, training=True)
         decoder_input = k_ops.zeros(shape=(batch_size, self._output_depth))
@@ -95,7 +95,7 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
                 **kwargs
             )
             output_sequence_logits.append(output_logits)
-            ar_token = input_sequence[:, i, :] if random.random() > teacher_force_probability else predicted_token
+            ar_token = input_sequence[:, i, :] if random.random() < sampling_probability else predicted_token
             decoder_input = self._embedding_layer(ar_token)
         return k_ops.stack(output_sequence_logits, axis=1)
 
@@ -210,14 +210,14 @@ class HierarchicalRNNDecoder(SequenceDecoder):
         core_decoder_z_shape = batch_size, self._stacked_hierarchical_rnn_cells[-1].output_size
         self._core_decoder.build((core_decoder_input_seq_shape, core_decoder_aux_input_shape, core_decoder_z_shape))
 
-    def decode(self, input_sequence, aux_inputs, z, teacher_force_probability=0.0, **kwargs):
+    def decode(self, input_sequence, aux_inputs, z, sampling_probability=1.0, **kwargs):
         def base_decode(embedding, path: List[int] = None):
             base_input_sequence = hierarchy_input_sequence[path]
             return self._core_decoder.decode(
                 input_sequence=base_input_sequence,
                 aux_inputs=aux_inputs,
                 z=embedding,
-                teacher_force_probability=teacher_force_probability,
+                sampling_probability=sampling_probability,
                 **kwargs
             )
 
