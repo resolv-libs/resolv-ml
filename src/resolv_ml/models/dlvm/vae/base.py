@@ -15,6 +15,7 @@ class VAE(keras.Model):
                  name: str = "vae",
                  **kwargs):
         super(VAE, self).__init__(name=name, **kwargs)
+        self._evaluation_mode = False
         # Encoder layers
         input_processing_layer.name = "input_processing"
         inference_layer.name = "inference"
@@ -44,12 +45,13 @@ class VAE(keras.Model):
         for layer in self._regularization_layers:
             layer.build(input_shape)
 
-    def call(self, inputs, training: bool = True, **kwargs):
-        if training:
+    def call(self, inputs, training: bool = False, **kwargs):
+        if training or self._evaluation_mode:
             vae_input, aux_input = inputs
             iterations = self.optimizer.iterations + 1
             z, *posterior_dist_params = self.encode(inputs, training=training, **kwargs)
-            outputs = self.decode((vae_input, aux_input, z), training=training, iterations=iterations)
+            outputs = self.decode((vae_input, aux_input, z), training=training, evaluate=self._evaluation_mode,
+                                  iterations=iterations)
             regularization_losses = []
             if self._regularization_layers:
                 for regularization_layer in self._regularization_layers:
@@ -70,17 +72,42 @@ class VAE(keras.Model):
         return z, *posterior_dist_params
 
     def decode(self, inputs, training: bool = False, **kwargs):
-        if training:
+        if training or self._evaluation_mode:
             vae_input, aux_input, z = inputs
             return self._generative_layer((vae_input, aux_input, z), training=training,
-                                          iterations=kwargs.pop('iterations', 1), **kwargs)
+                                          iterations=kwargs.pop('iterations', 1),
+                                          evaluate=keras.ops.convert_to_tensor(kwargs.pop('evaluate', False)),
+                                          **kwargs)
         else:
             z = inputs
             return self._generative_layer(z, training=training, **kwargs)
 
-    def test_step(self, data):
-        self._call_has_training_arg = False
-        return super().test_step(data)
+    def evaluate(
+            self,
+            x=None,
+            y=None,
+            batch_size=None,
+            verbose="auto",
+            sample_weight=None,
+            steps=None,
+            callbacks=None,
+            return_dict=False,
+            **kwargs
+    ):
+        self._evaluation_mode = True
+        eval_output = super().evaluate(
+            x=x,
+            y=y,
+            batch_size=batch_size,
+            verbose=verbose,
+            sample_weight=sample_weight,
+            steps=steps,
+            callbacks=callbacks,
+            return_dict=return_dict,
+            **kwargs
+        )
+        self._evaluation_mode = False
+        return eval_output
 
     def print_summary(
             self,

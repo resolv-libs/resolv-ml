@@ -31,7 +31,7 @@
     "verbose": "auto",
     "shuffle": false,
     "initial_epoch": 0,
-    "steps_per_epoch": 10,
+    "steps_per_epoch": 3,
     "validation_steps": null,
     "validation_batch_size": null,
     "validation_freq": 1

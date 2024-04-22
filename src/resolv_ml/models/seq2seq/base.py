@@ -76,7 +76,7 @@ class SequenceDecoder(keras.Model):
         raise NotImplementedError("SequenceDecoder.sample must be overridden by subclasses.")
 
     def call(self, inputs, training: bool = False, **kwargs):
-        if training:
+        if training or kwargs.get("evaluate", False):
             input_sequence, aux_inputs, z = inputs
             sampling_probability = training_helper.get_sampling_probability(
                 sampling_schedule=self._sampling_schedule,
