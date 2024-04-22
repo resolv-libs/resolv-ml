@@ -95,7 +95,7 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
                 **kwargs
             )
             output_sequence_logits.append(output_logits)
-            ar_token = input_sequence[:, i, :] if random.random() < teacher_force_probability else predicted_token
+            ar_token = input_sequence[:, i, :] if random.random() > teacher_force_probability else predicted_token
             decoder_input = self._embedding_layer(ar_token)
         return k_ops.stack(output_sequence_logits, axis=1)
 
