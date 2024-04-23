@@ -29,7 +29,9 @@ class Trainer:
 
     def train(self,
               train_data,
+              train_data_cardinality=None,
               validation_data=None,
+              validation_data_cardinality=None,
               class_weight=None,
               sample_weight=None,
               custom_callbacks: callbacks.Callback = None,
@@ -39,13 +41,26 @@ class Trainer:
         if not self._model.compiled:
             raise ValueError("Model is not compiled. Please call compile() before training.")
 
+        fit_config = self._config['fit'].copy()
+
+        steps_per_epoch = fit_config.pop('steps_per_epoch')
+        if not steps_per_epoch and train_data_cardinality:
+            steps_per_epoch = train_data_cardinality // fit_config['batch_size']
+
+        validation_steps = fit_config.pop('validation_steps')
+        if not validation_steps and validation_data_cardinality:
+            validation_batch_size = fit_config.get('validation_batch_size', fit_config['batch_size'])
+            validation_steps = validation_data_cardinality // validation_batch_size
+
         history = self._model.fit(
             train_data,
             callbacks=self._get_callbacks(custom_callbacks, lr_schedule, lr_scheduler_verbose, lambda_callbacks),
             validation_data=validation_data,
             class_weight=class_weight,
             sample_weight=sample_weight,
-            **self._config['fit']
+            steps_per_epoch=steps_per_epoch,
+            validation_steps=validation_steps,
+            **fit_config
         )
         return history
 
