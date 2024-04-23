@@ -49,7 +49,7 @@ class Trainer:
 
         validation_steps = fit_config.pop('validation_steps')
         if not validation_steps and validation_data_cardinality:
-            validation_batch_size = fit_config.get('validation_batch_size', fit_config['batch_size'])
+            validation_batch_size = fit_config.get('validation_batch_size') or fit_config['batch_size']
             validation_steps = validation_data_cardinality // validation_batch_size
 
         history = self._model.fit(
