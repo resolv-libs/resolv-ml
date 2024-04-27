@@ -68,10 +68,11 @@ class Trainer:
                 loss=None,
                 metrics=None,
                 weighted_metrics=None,
-                lr_schedule: Callable = None) -> keras.Model:
+                lr_schedule: keras.optimizers.schedules.LearningRateSchedule = None) -> keras.Model:
+        compile_config = self._config['compile']
         if lr_schedule:
-            self._config['compile']['optimizer']['learning_rate'] = lr_schedule
-        self._model.compile(loss=loss, metrics=metrics, weighted_metrics=weighted_metrics, **self._config['compile'])
+            compile_config['optimizer']["config"]['learning_rate'] = keras.optimizers.schedules.serialize(lr_schedule)
+        self._model.compile(loss=loss, metrics=metrics, weighted_metrics=weighted_metrics, **compile_config)
         return self._model
 
     def _get_callbacks(self,

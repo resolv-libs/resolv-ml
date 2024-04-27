@@ -12,6 +12,7 @@ from resolv_pipelines.data.representation.mir import PitchSequenceRepresentation
 
 from resolv_ml.models.dlvm.vae.ar_vae import AttributeRegularizedVAE, DefaultAttributeRegularization
 from resolv_ml.models.seq2seq.rnn import encoders, decoders
+from resolv_ml.training.callbacks import LearningRateLoggerCallback
 from resolv_ml.training.trainer import Trainer
 
 
@@ -102,14 +103,13 @@ class TestTrainer(unittest.TestCase):
                     metrics.SparseTopKCategoricalAccuracy()
                 ],
                 lr_schedule=keras.optimizers.schedules.ExponentialDecay(
-                    initial_learning_rate=0.001,
-                    decay_steps=10000,
-                    decay_rate=0.99
+                    **trainer.config["compile"]["optimizer"]["config"]["learning_rate"]
                 )
             )
             trainer.train(
                 train_data=self.load_dataset("train_pitchseq"),
-                validation_data=self.load_dataset("validation_pitchseq")
+                validation_data=self.load_dataset("validation_pitchseq"),
+                custom_callbacks=[LearningRateLoggerCallback()]
             )
 
 
