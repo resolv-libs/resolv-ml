@@ -46,8 +46,8 @@ class Trainer:
         fit_config = self._config['fit'].copy()
 
         batch_size = fit_config['batch_size']
-        total_steps = fit_config.pop('total_steps')
-        steps_per_epoch = fit_config.pop('steps_per_epoch')
+        total_steps = fit_config.pop('total_steps', None)
+        steps_per_epoch = fit_config.pop('steps_per_epoch', None)
         if not steps_per_epoch and train_data_cardinality:
             steps_per_epoch = train_data_cardinality // batch_size
         if total_steps:
@@ -55,12 +55,13 @@ class Trainer:
             if train_data_cardinality:
                 max_dataset_steps = train_data_cardinality // batch_size
                 if max_dataset_steps < total_steps:
+                    needed_repetitions = math.ceil(total_steps / max_dataset_steps)
                     logging.warning(f'The given number of total training steps ({total_steps}) exceeds the maximum '
                                     f'number of possible steps ({max_dataset_steps}) for a dataset with cardinality '
                                     f'{train_data_cardinality} and batch size {batch_size}. '
-                                    f'Be sure to call repeat() on the dataset.')
+                                    f'Be sure to call repeat({needed_repetitions}) on the dataset.')
 
-        validation_steps = fit_config.pop('validation_steps')
+        validation_steps = fit_config.pop('validation_steps', None)
         if not validation_steps and validation_data_cardinality:
             validation_batch_size = fit_config.get('validation_batch_size') or batch_size
             validation_steps = validation_data_cardinality // validation_batch_size
