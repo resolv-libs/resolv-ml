@@ -44,12 +44,13 @@ class Trainer:
             raise ValueError("Model is not compiled. Please call compile() before training.")
 
         fit_config = self._config['fit'].copy()
-        batch_size = fit_config['batch_size']
 
+        batch_size = fit_config['batch_size']
         total_steps = fit_config.pop('total_steps')
+        steps_per_epoch = fit_config.pop('steps_per_epoch')
+        if not steps_per_epoch and train_data_cardinality:
+            steps_per_epoch = train_data_cardinality // batch_size
         if total_steps:
-            fit_config.pop('steps_per_epoch')
-            steps_per_epoch = total_steps // fit_config.pop('validation_freq_steps')
             fit_config["epochs"] = total_steps // steps_per_epoch
             if train_data_cardinality:
                 max_dataset_steps = train_data_cardinality // batch_size
@@ -58,10 +59,6 @@ class Trainer:
                                     f'number of possible steps ({max_dataset_steps}) for a dataset with cardinality '
                                     f'{train_data_cardinality} and batch size {batch_size}. '
                                     f'Be sure to call repeat() on the dataset.')
-        else:
-            steps_per_epoch = fit_config.pop('steps_per_epoch')
-            if not steps_per_epoch and train_data_cardinality:
-                steps_per_epoch = train_data_cardinality // batch_size
 
         validation_steps = fit_config.pop('validation_steps')
         if not validation_steps and validation_data_cardinality:
