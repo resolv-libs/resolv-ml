@@ -1,6 +1,6 @@
 # TODO - DOC
 
-import keras.ops as k_ops
+from keras import ops as k_ops
 
 
 def compute_pairwise_distance_matrix(x):
@@ -8,12 +8,12 @@ def compute_pairwise_distance_matrix(x):
     Computes the pairwise distance matrix for a 1D tensor.
 
     Arguments:
-    x -- Tensor, shape (n,)
+    x -- Tensor, shape (n,) or (n, 1)
 
     Returns:
     distances -- Pairwise distances, shape (n, n)
     """
-    x_expanded = k_ops.expand_dims(x, 1)  # Expand dimensions to allow broadcasting
+    x_expanded = k_ops.expand_dims(x, 1) if len(x.shape) == 1 else x
     x_transposed = k_ops.transpose(x_expanded)
     distance_matrix = x_expanded - x_transposed  # Compute pairwise differences
     return distance_matrix
@@ -115,6 +115,6 @@ def pairwise_distance(x1, x2, metric='euclidean'):
     elif metric == 'dot_product':
         distances = dot_product_distance(x1, x2)
     else:
-        raise ValueError('Metric {} not supported. Available options: euclidean, cosine, manhattan, '
-                         'sqrt_euclidean, dot_product'.format(metric))
+        raise ValueError(f'Metric {metric} not supported. Available options: euclidean, cosine, manhattan, '
+                         'sqrt_euclidean, dot_product')
     return distances

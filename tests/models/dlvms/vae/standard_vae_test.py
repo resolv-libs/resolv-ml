@@ -102,7 +102,7 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
 
     def load_dataset(self, name: str) -> tf.data.TFRecordDataset:
         def map_fn(_, seq):
-            empty_aux = tf.zeros((1,))
+            empty_aux = tf.zeros(shape=(self.config["batch_size"], 1))
             input_seq = tf.transpose(seq["pitch_seq"])
             target = input_seq
             return (input_seq, empty_aux), target

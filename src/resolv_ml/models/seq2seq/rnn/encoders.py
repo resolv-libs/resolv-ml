@@ -68,6 +68,7 @@ class RNNEncoder(SequenceEncoder):
         embedding_layer = keras.layers.deserialize(config.pop("embedding_layer"))
         return cls(rnn_cell=rnn_cell, embedding_layer=embedding_layer, **config)
 
+
 @keras.saving.register_keras_serializable(package="SequenceEncoders", name="BidirectionalRNNEncoder")
 class BidirectionalRNNEncoder(SequenceEncoder):
 

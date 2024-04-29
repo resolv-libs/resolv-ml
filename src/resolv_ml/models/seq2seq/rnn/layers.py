@@ -2,8 +2,8 @@
 from typing import List, Any, Union
 
 import keras
-import keras.ops as k_ops
 import numpy as np
+from keras import ops as k_ops
 
 
 def get_default_rnn_cell(cell_size: int, dropout: float, name: str = "lstm") -> keras.layers.LSTMCell:

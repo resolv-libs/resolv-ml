@@ -2,7 +2,7 @@
 from typing import Any
 
 import keras
-import keras.ops as k_ops
+from keras import ops as k_ops
 
 
 @keras.saving.register_keras_serializable(package="Inference", name="GaussianInference")

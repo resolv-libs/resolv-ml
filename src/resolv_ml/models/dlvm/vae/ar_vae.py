@@ -1,7 +1,7 @@
 # TODO - DOC
 
 import keras
-import keras.ops as k_ops
+from keras import ops as k_ops
 
 from .vanilla_vae import StandardVAE
 from ....utilities.math.distances import compute_pairwise_distance_matrix
@@ -36,7 +36,7 @@ class AttributeRegularizationLayer(keras.Layer):
     
     def call(self, inputs, training: bool = False, **kwargs):
         _, attributes, _, z, _ = inputs
-        latent_dimension = z[:, self._regularization_dimension]
+        latent_dimension = k_ops.expand_dims(z[:, self._regularization_dimension], axis=-1)
         reg_loss = self._compute_attribute_regularization_loss(latent_dimension, attributes, training)
         return self._gamma * reg_loss
 

@@ -44,12 +44,13 @@ class Trainer:
             raise ValueError("Model is not compiled. Please call compile() before training.")
 
         fit_config = self._config['fit'].copy()
-
         batch_size = fit_config['batch_size']
         total_steps = fit_config.pop('total_steps', None)
         steps_per_epoch = fit_config.pop('steps_per_epoch', None)
+
         if not steps_per_epoch and train_data_cardinality:
             steps_per_epoch = train_data_cardinality // batch_size
+
         if total_steps:
             fit_config["epochs"] = total_steps // steps_per_epoch
             if train_data_cardinality:
@@ -63,7 +64,7 @@ class Trainer:
 
         validation_steps = fit_config.pop('validation_steps', None)
         if not validation_steps and validation_data_cardinality:
-            validation_batch_size = fit_config.get('validation_batch_size') or batch_size
+            validation_batch_size = fit_config.get('validation_batch_size', None) or batch_size
             validation_steps = validation_data_cardinality // validation_batch_size
 
         history = self._model.fit(

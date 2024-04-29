@@ -26,9 +26,9 @@ class StandardVAE(VAE):
         self._free_bits = free_bits
         self._mean_inference_layer = mean_inference_layer
         self._log_var_inference_layer = log_var_inference_layer
-        self.div_loss_tracker = keras.metrics.Mean(name=f"kl_loss")
-        self.div_bits_tracker = keras.metrics.Mean(name=f"kl_bits")
-        self.div_beta_tracker = keras.metrics.Mean(name=f"kl_beta")
+        self.div_loss_tracker = keras.metrics.Mean(name="kl_loss")
+        self.div_bits_tracker = keras.metrics.Mean(name="kl_bits")
+        self.div_beta_tracker = keras.metrics.Mean(name="kl_beta")
         super(StandardVAE, self).__init__(
             input_processing_layer=input_processing_layer,
             generative_layer=generative_layer,

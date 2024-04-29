@@ -1,10 +1,10 @@
 # TODO - DOC
+import math
 from abc import ABC
 from typing import Tuple
 
 import keras
-import keras.ops as k_ops
-import math
+from keras import ops as k_ops
 
 
 class PowerTransform(ABC, keras.Layer):

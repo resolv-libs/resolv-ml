@@ -2,10 +2,9 @@ import unittest
 from pathlib import Path
 
 import keras
-import keras.ops as k_ops
 import matplotlib.pyplot as plt
-
 import tensorflow as tf
+from keras import ops as k_ops
 
 from resolv_ml.utilities.distributions.power_transforms import BoxCox, YeoJohnson
 

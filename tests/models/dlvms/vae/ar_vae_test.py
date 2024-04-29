@@ -84,7 +84,7 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
     def load_dataset(self) -> tf.data.TFRecordDataset:
         def map_fn(ctx, seq):
             input_seq = tf.transpose(seq["pitch_seq"])
-            attributes = ctx["toussaint"]
+            attributes = tf.expand_dims(ctx["toussaint"], axis=-1)
             target = input_seq
             return (input_seq, attributes), target
 
