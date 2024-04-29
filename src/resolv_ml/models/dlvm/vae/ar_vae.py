@@ -54,7 +54,7 @@ class AttributeRegularizationLayer(keras.Layer):
 class DefaultAttributeRegularization(AttributeRegularizationLayer):
 
     def __init__(self,
-                 loss_fn: keras.losses.Loss = keras.losses.mean_absolute_error,
+                 loss_fn: keras.losses.Loss = keras.losses.MeanAbsoluteError(),
                  gamma: float = 1.0,
                  regularization_dimension: int = 0,
                  batch_normalization: keras.layers.BatchNormalization = None,
@@ -96,7 +96,7 @@ class DefaultAttributeRegularization(AttributeRegularizationLayer):
 class SignAttributeRegularization(AttributeRegularizationLayer):
 
     def __init__(self,
-                 loss_fn: keras.losses.Loss = keras.losses.mean_absolute_error,
+                 loss_fn: keras.losses.Loss = keras.losses.MeanAbsoluteError(),
                  gamma: float = 1.0,
                  regularization_dimension: int = 0,
                  scale_factor: float = 1.0,
@@ -146,7 +146,7 @@ class PowerTransformAttributeRegularization(AttributeRegularizationLayer):
 
     def __init__(self,
                  power_transform: PowerTransform,
-                 loss_fn: keras.losses.Loss = keras.losses.mean_absolute_error,
+                 loss_fn: keras.losses.Loss = keras.losses.MeanAbsoluteError(),
                  gamma: float = 1.0,
                  regularization_dimension: int = 0,
                  name: str = "pt_attr_reg",
