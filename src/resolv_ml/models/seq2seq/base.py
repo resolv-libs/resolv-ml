@@ -69,10 +69,10 @@ class SequenceDecoder(keras.Model):
         self._sampling_schedule = sampling_schedule
         self._sampling_rate = sampling_rate
 
-    def decode(self, input_sequence, aux_inputs, z, sampling_probability=1.0, **kwargs):
+    def decode(self, input_sequence, aux_inputs, z, sampling_probability: float = 1.0, **kwargs):
         raise NotImplementedError("SequenceDecoder.decode must be overridden by subclasses.")
 
-    def sample(self, z, sampling_mode, **kwargs):
+    def sample(self, z, tokens: int = 1, sampling_mode: str = "argmax", temperature: float = 1.0, **kwargs):
         raise NotImplementedError("SequenceDecoder.sample must be overridden by subclasses.")
 
     def call(self, inputs, training: bool = False, **kwargs):
@@ -81,14 +81,19 @@ class SequenceDecoder(keras.Model):
             sampling_probability = training_helper.get_sampling_probability(
                 sampling_schedule=self._sampling_schedule,
                 sampling_rate=self._sampling_rate,
-                step=kwargs.get("iterations", 0),
+                step=kwargs.pop("iterations", 1),
                 training=training
             )
             return self.decode(input_sequence, aux_inputs, z, sampling_probability, **kwargs)
         else:
             z = inputs
-            sampling_mode = kwargs.get("sampling_mode", "argmax")
-            return self.sample(z, sampling_mode=sampling_mode, **kwargs)
+            return self.sample(
+                z,
+                tokens=kwargs.pop("tokens", 1),
+                sampling_mode=kwargs.pop("sampling_mode", "argmax"),
+                temperature=kwargs.pop("temperature", 1.0),
+                **kwargs
+            )
 
     def get_config(self):
         base_config = super().get_config()

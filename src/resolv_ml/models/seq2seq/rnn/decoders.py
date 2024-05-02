@@ -80,15 +80,14 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
         if not self._output_projection.built:
             self._output_projection.build(output_projection_input_shape)
 
-    def decode(self, input_sequence, aux_inputs, z, sampling_probability=1.0, **kwargs):
+    def decode(self, input_sequence, aux_inputs, z, sampling_probability: float = 1.0, **kwargs):
         batch_size, sequence_length, features_length = input_sequence.shape
         initial_state = self._initial_state_layer(z, training=True)
         decoder_input = k_ops.zeros(shape=(batch_size, self._output_depth))
         output_sequence_logits = []
         for i in range(sequence_length):
-            decoder_input = k_ops.concatenate([decoder_input, z], axis=-1)
             predicted_token, output_logits, initial_state = self._predict_sequence_token(
-                rnn_input=decoder_input,
+                rnn_input=k_ops.concatenate([decoder_input, z], axis=-1),
                 initial_state=initial_state,
                 sampling_mode="argmax",
                 training=True,
@@ -100,18 +99,23 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
             decoder_input = self._embedding_layer(ar_token)
         return k_ops.stack(output_sequence_logits, axis=1)
 
-    def sample(self, z, sampling_mode, **kwargs):
+    def sample(self, z, tokens: int = 1, sampling_mode: str = "argmax", temperature: float = 1.0, **kwargs):
         batch_size = z.shape[0]
+        initial_state = self._initial_state_layer(z, training=False)
         decoder_input = k_ops.zeros(shape=(batch_size, self._output_depth))
-        initial_state = self._initial_state_layer(z, training=True)
-        predicted_token, _, _ = self._predict_sequence_token(
-            rnn_input=k_ops.concatenate([decoder_input, z], axis=-1),
-            initial_state=initial_state,
-            sampling_mode=sampling_mode,
-            training=False,
-            **kwargs
-        )
-        return predicted_token
+        predicted_tokens = []
+        for i in range(tokens):
+            predicted_token, _, _ = self._predict_sequence_token(
+                rnn_input=k_ops.concatenate([decoder_input, z], axis=-1),
+                initial_state=initial_state,
+                sampling_mode=sampling_mode,
+                temperature=temperature,
+                training=False,
+                **kwargs
+            )
+            predicted_tokens.append(predicted_token)
+            decoder_input = self._embedding_layer(predicted_token)
+        return k_ops.stack(predicted_tokens, axis=1)
 
     def _predict_sequence_token(self, rnn_input, initial_state=None, temperature: float = 1.0,
                                 sampling_mode: str = "argmax", training: bool = False, **kwargs):
@@ -211,7 +215,7 @@ class HierarchicalRNNDecoder(SequenceDecoder):
         core_decoder_z_shape = batch_size, self._stacked_hierarchical_rnn_cells[-1].output_size
         self._core_decoder.build((core_decoder_input_seq_shape, core_decoder_aux_input_shape, core_decoder_z_shape))
 
-    def decode(self, input_sequence, aux_inputs, z, sampling_probability=1.0, **kwargs):
+    def decode(self, input_sequence, aux_inputs, z, sampling_probability: float = 1.0, **kwargs):
         def base_decode(embedding, path: List[int] = None):
             base_input_sequence = hierarchy_input_sequence[path]
             return self._core_decoder.decode(
@@ -226,12 +230,19 @@ class HierarchicalRNNDecoder(SequenceDecoder):
         output_sequence = self._hierarchical_decode(z, base_fn=base_decode)
         return k_ops.concatenate(output_sequence, axis=1)
 
-    def sample(self, z, sampling_mode, **kwargs):
+    def sample(self, z, sampling_mode: str = "argmax", temperature: float = 1.0, **kwargs):
         def base_sample(embedding, _):
-            return self._core_decoder.sample(z=embedding, sampling_mode=sampling_mode, **kwargs)
+            return self._core_decoder.sample(
+                z=embedding,
+                tokens=self._level_lengths[-1],
+                sampling_mode=sampling_mode,
+                temperature=temperature,
+                **kwargs
+            )
 
+        kwargs.pop("tokens", None)  # TODO - add support for single time step in hierarchical sampling
         output_sequence = self._hierarchical_decode(z, base_fn=base_sample)
-        return output_sequence[0]
+        return k_ops.concatenate(output_sequence, axis=1)
 
     def _hierarchical_decode(self, z, base_fn: Callable):
         def recursive_decode(embedding, path: List[int] = None):

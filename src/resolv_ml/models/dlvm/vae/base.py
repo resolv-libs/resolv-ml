@@ -75,7 +75,7 @@ class VAE(keras.Model):
         if training or self._evaluation_mode:
             vae_input, aux_input, z = inputs
             return self._generative_layer((vae_input, aux_input, z), training=training,
-                                          iterations=kwargs.pop('iterations', 1),
+                                          iterations=kwargs.pop('iterations', keras.ops.convert_to_tensor(1)),
                                           evaluate=keras.ops.convert_to_tensor(kwargs.pop('evaluate', False)),
                                           **kwargs)
         else:

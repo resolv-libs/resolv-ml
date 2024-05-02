@@ -159,9 +159,7 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
             steps_per_epoch=5
         )
         vae_model.save(self.config["output_dir"] / "ar_seq2seq_vae_trained.keras")
-        # TODO - Can't compile the model again after loading don't know why
-        loaded_model = keras.saving.load_model(self.config["output_dir"] / "ar_seq2seq_vae_trained.keras",
-                                               compile=False)
+        loaded_model = keras.saving.load_model(self.config["output_dir"] / "ar_seq2seq_vae_trained.keras")
         # Use DeepDiff to ignore tuple to list type change in config comparison
         diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
         self.assertTrue(not diff)
@@ -189,12 +187,16 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
             steps_per_epoch=5
         )
         vae_model.save(self.config["output_dir"] / "hier_seq2seq_vae_trained.keras")
-        # TODO - Can't compile the model again after loading don't know why
-        loaded_model = keras.saving.load_model(self.config["output_dir"] / "hier_seq2seq_vae_trained.keras",
-                                               compile=False)
+        loaded_model = keras.saving.load_model(self.config["output_dir"] / "hier_seq2seq_vae_trained.keras")
         # Use DeepDiff to ignore tuple to list type change in config comparison
         diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
         self.assertTrue(not diff)
+
+    def test_hier_seq2seq_vae_inference(self):
+        loaded_model = keras.saving.load_model(self.config["output_dir"] / "hier_seq2seq_vae_trained.keras")
+        latent_codes = tf.keras.backend.random_normal(shape=(self.config["batch_size"], self.config["z_size"]))
+        predicted_sequences = loaded_model.predict(latent_codes)
+        self.assertTrue(predicted_sequences.shape == (self.config["batch_size"], self.config["sequence_length"]))
 
 
 if __name__ == '__main__':
