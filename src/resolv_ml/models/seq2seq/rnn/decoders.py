@@ -227,7 +227,7 @@ class HierarchicalRNNDecoder(SequenceDecoder):
             )
 
         hierarchy_input_sequence = self._reshape_to_hierarchy(input_sequence)
-        output_sequence = self._hierarchical_decode(z, base_fn=base_decode)
+        output_sequence = self._hierarchical_decode(z, base_fn=base_decode, training=True)
         return k_ops.concatenate(output_sequence, axis=1)
 
     def sample(self, z, sampling_mode: str = "argmax", temperature: float = 1.0, **kwargs):
@@ -241,10 +241,10 @@ class HierarchicalRNNDecoder(SequenceDecoder):
             )
 
         kwargs.pop("tokens", None)  # TODO - add support for single time step in hierarchical sampling
-        output_sequence = self._hierarchical_decode(z, base_fn=base_sample)
+        output_sequence = self._hierarchical_decode(z, base_fn=base_sample, training=False)
         return k_ops.concatenate(output_sequence, axis=1)
 
-    def _hierarchical_decode(self, z, base_fn: Callable):
+    def _hierarchical_decode(self, z, base_fn: Callable, training: bool = False):
         def recursive_decode(embedding, path: List[int] = None):
             """Recursive hierarchical decode function."""
             path = path or []
@@ -253,12 +253,12 @@ class HierarchicalRNNDecoder(SequenceDecoder):
                 decoded_subsequence = base_fn(embedding, path)
                 decoded_sequence.append(decoded_subsequence)
                 return decoded_subsequence
-            initial_state = self._hierarchical_initial_states[level](embedding, training=True)
+            initial_state = self._hierarchical_initial_states[level](embedding, training=training)
             for idx in range(self._level_lengths[level]):
                 level_input = k_ops.zeros(shape=(batch_size, 1))
                 output, initial_state = self._stacked_hierarchical_rnn_cells[level](level_input,
                                                                                     states=initial_state,
-                                                                                    training=True)
+                                                                                    training=training)
                 recursive_decode(output, path + [idx])
 
         batch_size = z.shape[0]
