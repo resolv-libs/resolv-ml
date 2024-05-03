@@ -15,19 +15,12 @@ class VAE(keras.Model):
                  name: str = "vae",
                  **kwargs):
         super(VAE, self).__init__(name=name, **kwargs)
-        self._evaluation_mode = False
-        # Encoder layers
-        input_processing_layer.name = "input_processing"
-        inference_layer.name = "inference"
-        sampling_layer.name = "sampling"
         self._input_processing_layer = input_processing_layer
         self._inference_layer = inference_layer
         self._sampling_layer = sampling_layer
-        # Decoder layers
-        generative_layer.name = "generative"
         self._generative_layer = generative_layer
-        # Add regularization layers
         self._regularization_layers = regularization_layers
+        self._evaluation_mode = False
 
     def _add_regularization_losses(self, regularization_losses):
         raise NotImplementedError("VAE subclasses must implement _add_regularization_losses.")
@@ -35,15 +28,20 @@ class VAE(keras.Model):
     def build(self, input_shape):
         super().build(input_shape)
         vae_input_shape, aux_input_shape = input_shape
-        self._input_processing_layer.build(vae_input_shape)
+        if not self._input_processing_layer.built:
+            self._input_processing_layer.build(vae_input_shape)
         input_processing_out_shape = self._input_processing_layer.compute_output_shape(vae_input_shape)
-        self._inference_layer.build(input_processing_out_shape)
+        if not self._inference_layer.built:
+            self._inference_layer.build(input_processing_out_shape)
         inference_out_shape = self._inference_layer.compute_output_shape(input_processing_out_shape)
-        self._sampling_layer.build((*inference_out_shape, aux_input_shape))
+        if not self._sampling_layer.built:
+            self._sampling_layer.build((*inference_out_shape, aux_input_shape))
         sampling_out_shape = self._sampling_layer.compute_output_shape((*inference_out_shape, aux_input_shape))
-        self._generative_layer.build(tuple(input_shape) + (sampling_out_shape,))
+        if not self._generative_layer.built:
+            self._generative_layer.build(tuple(input_shape) + (sampling_out_shape,))
         for layer in self._regularization_layers:
-            layer.build(input_shape)
+            if not layer.built:
+                layer.build(input_shape)
 
     def call(self, inputs, training: bool = False, **kwargs):
         if training or self._evaluation_mode:

@@ -10,7 +10,7 @@ from keras import losses, metrics
 from resolv_pipelines.data.loaders import TFRecordLoader
 from resolv_pipelines.data.representation.mir import PitchSequenceRepresentation
 
-from resolv_ml.models.dlvm.vae.ar_vae import AttributeRegularizedVAE, DefaultAttributeRegularization
+from resolv_ml.models.dlvm.vae.vanilla_vae import StandardVAE
 from resolv_ml.models.seq2seq.rnn import encoders, decoders
 from resolv_ml.training.callbacks import LearningRateLoggerCallback
 from resolv_ml.training.trainer import Trainer
@@ -41,9 +41,8 @@ class TestTrainer(unittest.TestCase):
         aux_input_shape = (32,)
         return input_seq_shape, aux_input_shape
 
-    def get_hierarchical_model(self, attribute_regularization_layer=DefaultAttributeRegularization()) \
-            -> AttributeRegularizedVAE:
-        model = AttributeRegularizedVAE(
+    def get_hierarchical_model(self) -> StandardVAE:
+        model = StandardVAE(
             z_size=128,
             input_processing_layer=encoders.BidirectionalRNNEncoder(
                 enc_rnn_sizes=[16, 16],
@@ -58,8 +57,26 @@ class TestTrainer(unittest.TestCase):
                 ),
                 dec_rnn_sizes=[16, 16],
             ),
-            attribute_regularization_layer=attribute_regularization_layer,
             max_beta=1.0,
+            beta_rate=0.0,
+            free_bits=0.0
+        )
+        model.build(self.get_input_shape())
+        return model
+
+    def get_flat_model(self) -> StandardVAE:
+        model = StandardVAE(
+            z_size=128,
+            input_processing_layer=encoders.BidirectionalRNNEncoder(
+                enc_rnn_sizes=[16, 16],
+                embedding_layer=keras.layers.Embedding(130, 70, name="encoder_embedding")
+            ),
+            generative_layer=decoders.RNNAutoregressiveDecoder(
+                dec_rnn_sizes=[16, 16],
+                num_classes=130,
+                embedding_layer=keras.layers.Embedding(130, 70, name="decoder_embedding")
+            ),
+            max_beta=0.0,
             beta_rate=0.0,
             free_bits=0.0
         )
@@ -93,7 +110,7 @@ class TestTrainer(unittest.TestCase):
         self.check_tf_gpu_availability()
         strategy = tf.distribute.get_strategy()
         with strategy.scope():
-            vae_model = self.get_hierarchical_model()
+            vae_model = self.get_flat_model()
             trainer = Trainer(vae_model, config_file_path=self.input_dir / "trainer_config.json")
             trainer.compile(
                 loss=losses.SparseCategoricalCrossentropy(from_logits=True),
@@ -111,6 +128,15 @@ class TestTrainer(unittest.TestCase):
                 validation_data=self.load_dataset("validation_pitchseq"),
                 custom_callbacks=[LearningRateLoggerCallback()]
             )
+
+    def test_model_inference(self):
+        # TODO - Change when keras issue is fixed
+        loaded_model = keras.saving.load_model(self.output_dir / "runs/checkpoints/epoch_02-val_loss_2.04.keras",
+                                               compile=False)
+        loaded_model.compile(run_eagerly=True)
+        latent_codes = keras.random.normal(shape=(32, 128))
+        predicted_sequences = loaded_model.decode(latent_codes, tokens=64)
+        self.assertTrue(predicted_sequences.shape == (32, 64))
 
 
 if __name__ == '__main__':

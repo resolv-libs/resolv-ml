@@ -21,7 +21,7 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
                  dropout: float = 0.0,
                  sampling_schedule: str = "constant",
                  sampling_rate: float = 0.0,
-                 name: str = "rnn_decoder",
+                 name: str = "autoregressive_decoder",
                  **kwargs):
         super(RNNAutoregressiveDecoder, self).__init__(
             embedding_layer=embedding_layer,
@@ -36,7 +36,10 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
         self._output_projection = output_projection_layer
         self._dropout = dropout
         self._stacked_rnn_cells = keras.layers.StackedRNNCells(
-            rnn_cell if rnn_cell else [rnn_layers.get_default_rnn_cell(size, dropout) for size in dec_rnn_sizes]
+            rnn_cell if rnn_cell else [
+                rnn_layers.get_default_rnn_cell(size, dropout, name=f"lstm_{cell_idx}")
+                for cell_idx, size in enumerate(dec_rnn_sizes)
+            ]
         )
         self._initial_state_layer = rnn_layers.InitialRNNCellStateFromEmbedding(
             cell_state_sizes=self._stacked_rnn_cells.state_size,
@@ -187,7 +190,11 @@ class HierarchicalRNNDecoder(SequenceDecoder):
         self._stacked_hierarchical_rnn_cells: List[keras.layers.StackedRNNCells] = []
         for level_idx in range(self._num_levels):
             level_rnn_cells = keras.layers.StackedRNNCells(
-                rnn_cell if rnn_cell else [rnn_layers.get_default_rnn_cell(size, dropout) for size in dec_rnn_sizes]
+                rnn_cell if rnn_cell else [
+                    rnn_layers.get_default_rnn_cell(size, dropout, name=f"lstm_{level_idx}_{cell_idx}")
+                    for cell_idx, size in enumerate(dec_rnn_sizes)
+                ],
+                name=f"level_{level_idx}_stacked_rnn_cells"
             )
             self._hierarchical_initial_states.append(
                 rnn_layers.InitialRNNCellStateFromEmbedding(
@@ -207,8 +214,12 @@ class HierarchicalRNNDecoder(SequenceDecoder):
             raise ValueError(f"The product of the HierarchicalLSTMDecoder level lengths {level_lengths_prod} must "
                              f"equal the input sequence length {sequence_length}.")
         rnn_cells_input_shape = batch_size, 1
-        for layer in self._stacked_hierarchical_rnn_cells:
-            layer.build(rnn_cells_input_shape)
+        initial_states_input_shape = z_shape
+        for level_idx in range(self._num_levels):
+            self._hierarchical_initial_states[level_idx].build(initial_states_input_shape)
+            current_level_rnn_cells = self._stacked_hierarchical_rnn_cells[level_idx]
+            current_level_rnn_cells.build(rnn_cells_input_shape)
+            initial_states_input_shape = batch_size, current_level_rnn_cells.output_size
         input_sequence_hier_shape = self._get_hierarchy_shape(input_sequence_shape)
         core_decoder_input_seq_shape = input_sequence_hier_shape[self._num_levels:]
         core_decoder_aux_input_shape = aux_input_shape
@@ -216,6 +227,7 @@ class HierarchicalRNNDecoder(SequenceDecoder):
         self._core_decoder.build((core_decoder_input_seq_shape, core_decoder_aux_input_shape, core_decoder_z_shape))
 
     def decode(self, input_sequence, aux_inputs, z, sampling_probability: float = 1.0, **kwargs):
+
         def base_decode(embedding, path: List[int] = None):
             base_input_sequence = hierarchy_input_sequence[path]
             return self._core_decoder.decode(
@@ -231,6 +243,7 @@ class HierarchicalRNNDecoder(SequenceDecoder):
         return k_ops.concatenate(output_sequence, axis=1)
 
     def sample(self, z, sampling_mode: str = "argmax", temperature: float = 1.0, **kwargs):
+
         def base_sample(embedding, _):
             return self._core_decoder.sample(
                 z=embedding,
@@ -245,6 +258,7 @@ class HierarchicalRNNDecoder(SequenceDecoder):
         return k_ops.concatenate(output_sequence, axis=1)
 
     def _hierarchical_decode(self, z, base_fn: Callable, training: bool = False):
+
         def recursive_decode(embedding, path: List[int] = None):
             """Recursive hierarchical decode function."""
             path = path or []
