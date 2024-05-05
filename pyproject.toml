@@ -35,15 +35,16 @@ include = ["CHANGELOG.md"]
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.12"
-keras = ">=3.3.3"
+keras = { git = "https://git@github.com/keras-team/keras.git", rev = "master"}
+tensorflow-probability = { version = "^0.24.0", extras = ["tf"]}
 
 [tool.poetry.group.dev.dependencies]
 
 [tool.poetry.group.test.dependencies]
 matplotlib = "*"
 deepdiff = "*"
-tensorflow-metal = ">=1.1.0"
-resolv-pipelines = { git = "ssh://git@github.com/resolv-libs/resolv-pipelines.git", rev = "main", extras = ["tensorflow"]}
+tensorflow-metal = "^1.1.0"
+resolv-pipelines = {git = "ssh://git@github.com/resolv-libs/resolv-pipelines.git", rev = "main", extras = ["tensorflow"]}
 
 [tool.poetry.group.docs.dependencies]
 

@@ -1,7 +1,8 @@
 # TODO - DOC
-
+# TODO - add multi-backend support for probability distributions
 import keras
 from keras import ops as k_ops
+from tensorflow_probability import distributions as tfp_dist
 
 from .vanilla_vae import StandardVAE
 from ....utilities.math.distances import compute_pairwise_distance_matrix
@@ -34,8 +35,8 @@ class AttributeRegularizationLayer(keras.Layer):
         if self._batch_normalization and not self._batch_normalization.built:
             self._batch_normalization.build(aux_input_shape)
     
-    def call(self, inputs, training: bool = False, **kwargs):
-        _, attributes, _, z, _ = inputs
+    def call(self, inputs, posterior: tfp_dist.Distribution, training: bool = False, **kwargs):
+        _, attributes, z, _ = inputs
         latent_dimension = k_ops.expand_dims(z[:, self._regularization_dimension], axis=-1)
         reg_loss = self._compute_attribute_regularization_loss(latent_dimension, attributes, training)
         return self._gamma * reg_loss
@@ -199,7 +200,7 @@ class AttributeRegularizedVAE(StandardVAE):
                  generative_layer: keras.Layer,
                  attribute_regularization_layer: AttributeRegularizationLayer = DefaultAttributeRegularization(),
                  mean_inference_layer: keras.Layer = None,
-                 log_var_inference_layer: keras.Layer = None,
+                 sigma_inference_layer: keras.Layer = None,
                  max_beta: float = 1.0,
                  beta_rate: float = 0.0,
                  free_bits: float = 0.0,
@@ -212,7 +213,7 @@ class AttributeRegularizedVAE(StandardVAE):
             input_processing_layer=input_processing_layer,
             generative_layer=generative_layer,
             mean_inference_layer=mean_inference_layer,
-            log_var_inference_layer=log_var_inference_layer,
+            sigma_inference_layer=sigma_inference_layer,
             free_bits=free_bits,
             max_beta=max_beta,
             beta_rate=beta_rate,
@@ -238,13 +239,13 @@ class AttributeRegularizedVAE(StandardVAE):
     def from_config(cls, config, custom_objects=None):
         input_processing_layer = keras.saving.deserialize_keras_object(config.pop("input_processing_layer"))
         mean_inference_layer = keras.saving.deserialize_keras_object(config.pop("mean_inference_layer"))
-        log_var_inference_layer = keras.saving.deserialize_keras_object(config.pop("log_var_inference_layer"))
+        sigma_inference_layer = keras.saving.deserialize_keras_object(config.pop("sigma_inference_layer"))
         generative_layer = keras.saving.deserialize_keras_object(config.pop("generative_layer"))
         attribute_reg_layer = keras.saving.deserialize_keras_object(config.pop("attribute_regularization_layer"))
         return cls(
             input_processing_layer=input_processing_layer,
             mean_inference_layer=mean_inference_layer,
-            log_var_inference_layer=log_var_inference_layer,
+            sigma_inference_layer=sigma_inference_layer,
             generative_layer=generative_layer,
             attribute_regularization_layer=attribute_reg_layer,
             **config

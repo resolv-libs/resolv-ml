@@ -33,12 +33,12 @@
     "auto_scale_loss": true
   },
   "fit": {
-    "batch_size": 32,
-    "epochs": 2,
+    "batch_size": 512,
+    "epochs": 1,
     "verbose": "auto",
     "shuffle": false,
     "initial_epoch": 0,
-    "steps_per_epoch": null,
+    "steps_per_epoch": 2,
     "validation_steps": null,
     "validation_batch_size": null,
     "validation_freq": 1

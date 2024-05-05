@@ -1,8 +1,9 @@
 # TODO - DOC
+# TODO - add multi-backend support for probability distributions
 from typing import Any
 
 import keras
-from keras import ops as k_ops
+from tensorflow_probability import distributions as tfp_dist
 
 
 @keras.saving.register_keras_serializable(package="Inference", name="GaussianInference")
@@ -11,28 +12,27 @@ class GaussianInference(keras.Layer):
     def __init__(self,
                  z_size: int,
                  mean_layer: keras.Layer = None,
-                 log_var_layer: keras.Layer = None,
+                 sigma_layer: keras.Layer = None,
                  name: str = "gaussian_inference",
                  **kwargs):
         super(GaussianInference, self).__init__(name=name, **kwargs)
         self._z_size = z_size
         self._mean_layer = mean_layer if mean_layer else self.default_mean_layer(z_size)
-        self._log_var_layer = log_var_layer if log_var_layer else self.default_log_var_layer(z_size)
+        self._sigma_layer = sigma_layer if sigma_layer else self.default_sigma_layer(z_size)
 
     def build(self, input_shape):
         if not self._mean_layer.built:
             self._mean_layer.build(input_shape)
-        if not self._log_var_layer.built:
-            self._log_var_layer.build(input_shape)
+        if not self._sigma_layer.built:
+            self._sigma_layer.build(input_shape)
 
     def call(self, inputs: Any, training: bool = False, **kwargs):
         z_mean = self._mean_layer(inputs)
-        z_log_var = self._log_var_layer(inputs)
-        return z_mean, k_ops.exp(z_log_var)
+        z_sigma = self._sigma_layer(inputs)
+        return tfp_dist.MultivariateNormalDiag(loc=z_mean, scale_diag=z_sigma)
 
     def compute_output_shape(self, input_shape):
-        return (self._mean_layer.compute_output_shape(input_shape),
-                self._log_var_layer.compute_output_shape(input_shape))
+        return (1,)
 
     @classmethod
     def default_mean_layer(cls, z_size: int) -> keras.layers.Dense:
@@ -45,14 +45,14 @@ class GaussianInference(keras.Layer):
         )
 
     @classmethod
-    def default_log_var_layer(cls, z_size: int) -> keras.layers.Dense:
+    def default_sigma_layer(cls, z_size: int) -> keras.layers.Dense:
         return keras.layers.Dense(
             units=z_size,
-            activation=None,
+            activation="softplus",
             use_bias=True,
             kernel_initializer=keras.initializers.RandomNormal(stddev=0.001),
             bias_initializer="zeros",
-            name="z_log_var"
+            name="z_sigma"
         )
 
     def get_config(self):
@@ -60,29 +60,32 @@ class GaussianInference(keras.Layer):
         config = {
             "z_size": self._z_size,
             "mean_layer": keras.saving.serialize_keras_object(self._mean_layer),
-            "log_var_layer": keras.saving.serialize_keras_object(self._log_var_layer),
+            "sigma_layer": keras.saving.serialize_keras_object(self._sigma_layer),
         }
         return {**base_config, **config}
 
     @classmethod
     def from_config(cls, config):
         mean_layer = keras.saving.deserialize_keras_object(config.pop("mean_layer"))
-        log_var_layer = keras.saving.deserialize_keras_object(config.pop("log_var_layer"))
-        return cls(mean_layer=mean_layer, log_var_layer=log_var_layer, **config)
+        sigma_layer = keras.saving.deserialize_keras_object(config.pop("sigma_layer"))
+        return cls(mean_layer=mean_layer, sigma_layer=sigma_layer, **config)
 
 
-@keras.saving.register_keras_serializable(package="Inference", name="GaussianReparametrizationTrick")
-class GaussianReparametrizationTrick(keras.Layer):
+@keras.saving.register_keras_serializable(package="Inference", name="SamplingLayer")
+class SamplingLayer(keras.Layer):
 
-    def __init__(self, z_size: int, name: str = "reparametrization_trick", **kwargs):
-        super(GaussianReparametrizationTrick, self).__init__(name=name, **kwargs)
+    def __init__(self,
+                 prior: tfp_dist.Distribution,
+                 z_size: int,
+                 name: str = "sampling",
+                 **kwargs):
+        super(SamplingLayer, self).__init__(name=name, **kwargs)
         self._z_size = z_size
+        self._prior = prior
 
     def compute_output_shape(self, input_shape, **kwargs):
-        return input_shape[0]
+        return input_shape[0], self._z_size
 
-    def call(self, inputs, training: bool = False, **kwargs):
-        z_mean, z_var, _ = inputs
-        epsilon = keras.random.normal(shape=k_ops.shape(z_mean), mean=0.0, stddev=1.0)
-        z = z_mean + k_ops.sqrt(z_var) * epsilon
+    def call(self, inputs, posterior: tfp_dist.Distribution, training: bool = False, **kwargs):
+        z = posterior.sample() if training or kwargs.pop("evaluate", False) else self._prior.sample()
         return z

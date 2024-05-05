@@ -134,7 +134,7 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
         )
         vae_model.fit(self.load_dataset(), batch_size=self.config["batch_size"], epochs=1, steps_per_epoch=5)
         vae_model.save(self.config["output_dir"] / "ar_default_reg_trained.keras")
-        # TODO - Can't compile the model again after loading don't know why
+        # TODO - loading VAE with compile=True does not work (seems a Keras bug)
         loaded_model = keras.saving.load_model(self.config["output_dir"] / "ar_default_reg_trained.keras",
                                                compile=False)
         # Use DeepDiff to ignore tuple to list type change in config comparison
@@ -150,7 +150,7 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
         )
         vae_model.fit(self.load_dataset(), batch_size=self.config["batch_size"], epochs=1, steps_per_epoch=5)
         vae_model.save(self.config["output_dir"] / "ar_sign_reg_trained.keras")
-        # TODO - Can't compile the model again after loading don't know why
+        # TODO - loading VAE with compile=True does not work (seems a Keras bug)
         loaded_model = keras.saving.load_model(self.config["output_dir"] / "ar_sign_reg_trained.keras",
                                                compile=False)
         # Use DeepDiff to ignore tuple to list type change in config comparison
@@ -169,7 +169,7 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
         )
         vae_model.fit(self.load_dataset(), batch_size=self.config["batch_size"], epochs=1, steps_per_epoch=5)
         vae_model.save(self.config["output_dir"] / "ar_pt_reg_trained_box_cox.keras")
-        # TODO - Can't compile the model again after loading don't know why
+        # TODO - loading VAE with compile=True does not work (seems a Keras bug)
         loaded_model = keras.saving.load_model(self.config["output_dir"] / "ar_pt_reg_trained_box_cox.keras",
                                                compile=False)
         # Use DeepDiff to ignore tuple to list type change in config comparison
@@ -188,7 +188,7 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
         )
         vae_model.fit(self.load_dataset(), batch_size=self.config["batch_size"], epochs=1, steps_per_epoch=5)
         vae_model.save(self.config["output_dir"] / "ar_pt_reg_trained_yeo_johnson.keras")
-        # TODO - Can't compile the model again after loading don't know why
+        # TODO - loading VAE with compile=True does not work (seems a Keras bug)
         loaded_model = keras.saving.load_model(self.config["output_dir"] / "ar_pt_reg_trained_yeo_johnson.keras",
                                                compile=False)
         # Use DeepDiff to ignore tuple to list type change in config comparison

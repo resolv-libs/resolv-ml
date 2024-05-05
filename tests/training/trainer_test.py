@@ -76,7 +76,7 @@ class TestTrainer(unittest.TestCase):
                 num_classes=130,
                 embedding_layer=keras.layers.Embedding(130, 70, name="decoder_embedding")
             ),
-            max_beta=0.0,
+            max_beta=1.0,
             beta_rate=0.0,
             free_bits=0.0
         )
@@ -110,7 +110,7 @@ class TestTrainer(unittest.TestCase):
         self.check_tf_gpu_availability()
         strategy = tf.distribute.get_strategy()
         with strategy.scope():
-            vae_model = self.get_flat_model()
+            vae_model = self.get_hierarchical_model()
             trainer = Trainer(vae_model, config_file_path=self.input_dir / "trainer_config.json")
             trainer.compile(
                 loss=losses.SparseCategoricalCrossentropy(from_logits=True),
@@ -130,10 +130,7 @@ class TestTrainer(unittest.TestCase):
             )
 
     def test_model_inference(self):
-        # TODO - Change when keras issue is fixed
-        loaded_model = keras.saving.load_model(self.output_dir / "runs/checkpoints/epoch_02-val_loss_2.04.keras",
-                                               compile=False)
-        loaded_model.compile(run_eagerly=True)
+        loaded_model = keras.saving.load_model(self.output_dir / "runs/checkpoints/epoch_01-val_loss_18.20.keras")
         latent_codes = keras.random.normal(shape=(32, 128))
         predicted_sequences = loaded_model.decode(latent_codes, tokens=64)
         self.assertTrue(predicted_sequences.shape == (32, 64))

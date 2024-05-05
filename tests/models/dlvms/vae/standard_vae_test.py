@@ -159,7 +159,9 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
             steps_per_epoch=5
         )
         vae_model.save(self.config["output_dir"] / "ar_seq2seq_vae_trained.keras")
-        loaded_model = keras.saving.load_model(self.config["output_dir"] / "ar_seq2seq_vae_trained.keras")
+        # TODO - loading VAE with compile=True does not work (seems a Keras bug)
+        loaded_model = keras.saving.load_model(self.config["output_dir"] / "ar_seq2seq_vae_trained.keras",
+                                               compile=False)
         # Use DeepDiff to ignore tuple to list type change in config comparison
         diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
         self.assertTrue(not diff)
@@ -187,13 +189,17 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
             steps_per_epoch=5
         )
         vae_model.save(self.config["output_dir"] / "hier_seq2seq_vae_trained.keras")
-        loaded_model = keras.saving.load_model(self.config["output_dir"] / "hier_seq2seq_vae_trained.keras")
+        # TODO - loading VAE with compile=True does not work (seems a Keras bug)
+        loaded_model = keras.saving.load_model(self.config["output_dir"] / "hier_seq2seq_vae_trained.keras",
+                                               compile=False)
         # Use DeepDiff to ignore tuple to list type change in config comparison
         diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
         self.assertTrue(not diff)
 
     def test_hier_seq2seq_vae_inference(self):
-        loaded_model = keras.saving.load_model(self.config["output_dir"] / "hier_seq2seq_vae_trained.keras")
+        # TODO - loading VAE with compile=True does not work (seems a Keras bug)
+        loaded_model = keras.saving.load_model(self.config["output_dir"] / "hier_seq2seq_vae_trained.keras",
+                                               compile=False)
         latent_codes = tf.keras.backend.random_normal(shape=(self.config["batch_size"], self.config["z_size"]))
         predicted_sequences = loaded_model.predict(latent_codes)
         self.assertTrue(predicted_sequences.shape == (self.config["batch_size"], self.config["sequence_length"]))

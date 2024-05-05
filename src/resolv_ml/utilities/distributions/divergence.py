@@ -1,6 +1,8 @@
 """ TODO - doc """
+# TODO - add multi-backend support for probability distributions
 import keras
 from keras import ops as k_ops
+from tensorflow_probability import distributions as tfp_dist
 
 
 @keras.saving.register_keras_serializable(package="Divergences", name="BetaDivergence")
@@ -25,9 +27,8 @@ class BetaDivergenceRegularizer(keras.Layer):
         super().build(input_shape)
         self._divergence_layer.build(input_shape)
 
-    def call(self, inputs, training: bool = False, **kwargs):
-        _, _, posterior_dist_params, _, _ = inputs
-        div = self._divergence_layer(posterior_dist_params, training=training)
+    def call(self, inputs, posterior: tfp_dist.Distribution, training: bool = False, **kwargs):
+        div = self._divergence_layer(inputs, posterior=posterior, training=training)
         # Compute the cost according to free_bits
         free_nats = self._free_bits * k_ops.log(2.0)
         div_cost = k_ops.maximum(div - free_nats, 0)
@@ -54,19 +55,18 @@ class BetaDivergenceRegularizer(keras.Layer):
         return cls(divergence_layer=divergence_layer, **config)
 
 
-@keras.saving.register_keras_serializable(package="Divergences", name="GaussianKLD")
-class GaussianKLDivergence(keras.Layer):
+@keras.saving.register_keras_serializable(package="Divergences", name="KLDivergence")
+class KLDivergence(keras.Layer):
 
-    def __init__(self, name: str = "gauss_kl_div", **kwargs):
-        super(GaussianKLDivergence, self).__init__(name=name, **kwargs)
+    def __init__(self,
+                 prior: tfp_dist.Distribution,
+                 name: str = "gauss_kl_div",**kwargs):
+        super(KLDivergence, self).__init__(name=name, **kwargs)
+        self._prior = prior
 
-    def call(self, inputs, training: bool = False, **kwargs):
-        if len(inputs) == 2:
-            p_mean, p_var, q_mean, q_var = tuple(inputs) + (0, 1)
-        else:
-            p_mean, p_var, q_mean, q_var = tuple(inputs)
-        kl_loss = k_ops.sum(0.5 * (k_ops.log(p_var/q_var) + (k_ops.square(q_mean-p_mean) + q_var)/p_var - 1), axis=-1)
-        return k_ops.mean(kl_loss)
+    def call(self, inputs, posterior: tfp_dist.Distribution, training: bool = False, **kwargs):
+        kl_loss = tfp_dist.kl_divergence(posterior, self._prior)
+        return kl_loss
 
     def compute_output_shape(self, input_shape):
-        return (1,)
+        return (input_shape[0],)

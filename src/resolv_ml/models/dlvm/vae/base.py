@@ -33,10 +33,9 @@ class VAE(keras.Model):
         input_processing_out_shape = self._input_processing_layer.compute_output_shape(vae_input_shape)
         if not self._inference_layer.built:
             self._inference_layer.build(input_processing_out_shape)
-        inference_out_shape = self._inference_layer.compute_output_shape(input_processing_out_shape)
         if not self._sampling_layer.built:
-            self._sampling_layer.build((*inference_out_shape, aux_input_shape))
-        sampling_out_shape = self._sampling_layer.compute_output_shape((*inference_out_shape, aux_input_shape))
+            self._sampling_layer.build(aux_input_shape)
+        sampling_out_shape = self._sampling_layer.compute_output_shape(aux_input_shape)
         if not self._generative_layer.built:
             self._generative_layer.build(tuple(input_shape) + (sampling_out_shape,))
         for layer in self._regularization_layers:
@@ -47,14 +46,15 @@ class VAE(keras.Model):
         if training or self._evaluation_mode:
             vae_input, aux_input = inputs
             iterations = self.optimizer.iterations + 1
-            z, *posterior_dist_params = self.encode(inputs, training=training, **kwargs)
-            outputs = self.decode((vae_input, aux_input, z), training=training, evaluate=self._evaluation_mode,
-                                  iterations=iterations)
+            z, posterior_dist = self.encode(inputs, training=training, **kwargs)
+            outputs = self.decode((vae_input, aux_input, z), training=training, iterations=iterations)
             regularization_losses = []
             if self._regularization_layers:
                 for regularization_layer in self._regularization_layers:
-                    regularizer_inputs = vae_input, aux_input, posterior_dist_params, z, outputs
-                    layer_reg_losses = regularization_layer(regularizer_inputs, training=training,
+                    regularizer_inputs = vae_input, aux_input, z, outputs
+                    layer_reg_losses = regularization_layer(regularizer_inputs,
+                                                            posterior=posterior_dist,
+                                                            training=training,
                                                             iterations=iterations)
                     regularization_losses.append(layer_reg_losses)
                 self._add_regularization_losses(regularization_losses)
@@ -65,16 +65,21 @@ class VAE(keras.Model):
     def encode(self, inputs, training: bool = False, **kwargs):
         vae_input, aux_input = inputs
         input_processing_layer_out = self._input_processing_layer(vae_input, training=training, **kwargs)
-        posterior_dist_params = self._inference_layer(input_processing_layer_out, training=training, **kwargs)
-        z = self._sampling_layer((*posterior_dist_params, aux_input), training=training, **kwargs)
-        return z, *posterior_dist_params
+        posterior_dist = self._inference_layer(input_processing_layer_out, training=training, **kwargs)
+        z = self._sampling_layer(aux_input,
+                                 posterior=posterior_dist,
+                                 training=training,
+                                 evaluate=self._evaluation_mode,
+                                 **kwargs)
+        return z, posterior_dist
 
     def decode(self, inputs, training: bool = False, **kwargs):
         if training or self._evaluation_mode:
             vae_input, aux_input, z = inputs
-            return self._generative_layer((vae_input, aux_input, z), training=training,
+            return self._generative_layer((vae_input, aux_input, z),
+                                          training=training,
                                           iterations=kwargs.pop('iterations', keras.ops.convert_to_tensor(1)),
-                                          evaluate=keras.ops.convert_to_tensor(kwargs.pop('evaluate', False)),
+                                          evaluate=keras.ops.convert_to_tensor(self._evaluation_mode),
                                           **kwargs)
         else:
             z = inputs

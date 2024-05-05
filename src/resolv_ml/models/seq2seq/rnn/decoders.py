@@ -78,8 +78,6 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
                 bias_initializer="zeros",
                 name="output_projection"
             )
-        # TODO - for Dense and Embedding layers need to check the built flag before calling. Otherwise build_from_config
-        #  does not work.
         if not self._output_projection.built:
             self._output_projection.build(output_projection_input_shape)
 
