@@ -66,6 +66,7 @@ class VAE(keras.Model):
                                                             iterations=iterations)
                     regularization_losses.append(layer_reg_losses)
                 self._add_regularization_losses(regularization_losses)
+            return outputs
         else:
             if len(inputs[0].shape) == 0 and len(inputs[1].shape) == 0:
                 # Inputs are scalars (generation mode)
@@ -78,7 +79,7 @@ class VAE(keras.Model):
                 sequence_length = keras.ops.convert_to_tensor(vae_input.shape[1])
                 z, _ = self.encode(inputs=(vae_input, aux_input), evaluate=True, **kwargs)
                 outputs = self.decode(inputs=(z, sequence_length), **kwargs)
-        return outputs
+            return outputs, z
 
     def encode(self, inputs, training: bool = False, evaluate: bool = False, **kwargs):
         vae_input, aux_input = inputs
