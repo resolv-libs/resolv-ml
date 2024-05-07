@@ -134,11 +134,12 @@ class TestTrainer(unittest.TestCase):
                                                compile=False)
         loaded_model.compile(run_eagerly=True)
         num_sequences, sequence_length = (32, 64)
-        predicted_sequences = loaded_model.predict(x=keras.ops.convert_to_tensor((num_sequences, sequence_length)))
+        predicted_sequences, _ = loaded_model.predict(x=keras.ops.convert_to_tensor((num_sequences, sequence_length)))
         self.assertTrue(predicted_sequences.shape == (32, 64))
         test_sequences = self.load_dataset("test_pitchseq")
-        predicted_sequences = loaded_model.predict(x=test_sequences, batch_size=32)
+        predicted_sequences, latent_codes, _, _ = loaded_model.predict(x=test_sequences, batch_size=32)
         self.assertTrue(predicted_sequences.shape[-1] == 64)
+        self.assertTrue(latent_codes.shape[-1] == 128)
 
 
 if __name__ == '__main__':

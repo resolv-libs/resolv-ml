@@ -126,13 +126,15 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
         diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
         self.assertTrue(not diff)
         logging.info("Testing model inference...")
-        num_sequences, sequence_length = (32, 64)
+        num_sequences, sequence_length = (self.config["batch_size"], self.config["sequence_length"])
         predicted_sequences, _ = loaded_model.predict(x=keras.ops.convert_to_tensor((num_sequences, sequence_length)))
-        self.assertTrue(predicted_sequences.shape == (32, 64))
+        self.assertTrue(predicted_sequences.shape == (num_sequences, sequence_length))
         logging.info("Testing model inference with encoding...")
         test_sequences = self.load_dataset("test_pitchseq")
-        predicted_sequences, _ = loaded_model.predict(x=test_sequences, batch_size=32)
-        self.assertTrue(predicted_sequences.shape[-1] == 64)
+        predicted_sequences, latent_codes, _, _ = loaded_model.predict(x=test_sequences,
+                                                                       batch_size=self.config["batch_size"])
+        self.assertTrue(predicted_sequences.shape[-1] == self.config["sequence_length"])
+        self.assertTrue(latent_codes.shape[-1] == self.config["z_size"])
 
     def test_summary_and_plot(self):
         vae_model = self.get_hierarchical_model()

@@ -73,13 +73,14 @@ class VAE(keras.Model):
                 num_sequences, seq_length = inputs
                 z = self._sampling_layer(inputs=num_sequences)
                 outputs = self.decode((z, seq_length), **kwargs)
+                return outputs, z
             else:
                 # Inputs are tensors (encoding-decoding mode)
                 vae_input, aux_input = inputs
                 sequence_length = keras.ops.convert_to_tensor(vae_input.shape[1])
                 z, _ = self.encode(inputs=(vae_input, aux_input), evaluate=True, **kwargs)
                 outputs = self.decode(inputs=(z, sequence_length), **kwargs)
-            return outputs, z
+                return outputs, z, vae_input, aux_input
 
     def encode(self, inputs, training: bool = False, evaluate: bool = False, **kwargs):
         vae_input, aux_input = inputs
