@@ -155,22 +155,22 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
         diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
         self.assertTrue(not diff)
 
-    def test_training_default_regularization(self):
+    def test_default_regularization_model(self):
         vae_model = self.get_hierarchical_model()
         self._test_model(vae_model, "ar_default_reg_trained.keras")
 
-    def test_training_sign_regularization(self):
+    def test_sign_regularization_model(self):
         vae_model = self.get_hierarchical_model(attribute_regularization_layer=SignAttributeRegularization())
         self._test_model(vae_model, "ar_sign_reg_trained.keras")
 
-    def test_training_power_transform_regularization_box_cox(self):
+    def test_power_transform_regularization_box_cox_model(self):
         vae_model = self.get_hierarchical_model(
             attribute_regularization_layer=PowerTransformAttributeRegularization(
                 power_transform=BoxCox(lambda_init=0.0, batch_norm=keras.layers.BatchNormalization()))
         )
         self._test_model(vae_model, "ar_pt_reg_trained_box_cox.keras")
 
-    def test_training_power_transform_regularization_yeo_johnson(self):
+    def test_power_transform_regularization_yeo_johnson_model(self):
         vae_model = self.get_hierarchical_model(
             attribute_regularization_layer=PowerTransformAttributeRegularization(
                 power_transform=YeoJohnson(batch_norm=keras.layers.BatchNormalization()))

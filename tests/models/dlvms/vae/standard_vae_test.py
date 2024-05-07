@@ -175,7 +175,7 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
         diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
         self.assertTrue(not diff)
 
-    def test_ar_seq2seq_vae_training(self):
+    def test_ar_seq2seq_vae_model(self):
         vae_model = self.get_autoregressive_model()
         self._test_model(vae_model, "ar_seq2seq_vae_trained.keras")
 
@@ -187,7 +187,7 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
         diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
         self.assertTrue(not diff)
 
-    def test_hier_seq2seq_vae_training(self):
+    def test_hier_seq2seq_vae_model(self):
         vae_model = self.get_hierarchical_model()
         self._test_model(vae_model, "ar_seq2seq_vae_trained.keras")
 
