@@ -133,13 +133,18 @@ class TestTrainer(unittest.TestCase):
         loaded_model = keras.saving.load_model(self.output_dir / "runs/checkpoints/epoch_01-val_loss_18.36.keras",
                                                compile=False)
         loaded_model.compile(run_eagerly=True)
+        logging.info("Testing model inference...")
         num_sequences, sequence_length = (32, 64)
         predicted_sequences, _ = loaded_model.predict(x=keras.ops.convert_to_tensor((num_sequences, sequence_length)))
         self.assertTrue(predicted_sequences.shape == (32, 64))
+        logging.info("Testing model inference with encoding...")
         test_sequences = self.load_dataset("test_pitchseq")
         predicted_sequences, latent_codes, _, _ = loaded_model.predict(x=test_sequences, batch_size=32)
         self.assertTrue(predicted_sequences.shape[-1] == 64)
         self.assertTrue(latent_codes.shape[-1] == 128)
+        logging.info("Testing model sampling...")
+        latent_codes = loaded_model.sample(num_samples=keras.ops.convert_to_tensor(1000))
+        self.assertTrue(latent_codes.shape == (1000, 128))
 
 
 if __name__ == '__main__':

@@ -93,6 +93,10 @@ class VAE(keras.Model):
                                  **kwargs)
         return z, posterior_dist
 
+    def sample(self, num_samples, training: bool = False, evaluate: bool = False, **kwargs):
+        z = self._sampling_layer(num_samples, training=training, evaluate=evaluate, **kwargs)
+        return z
+
     def decode(self, inputs, iterations=None, training: bool = False, evaluate: bool = False, **kwargs):
         if training or evaluate:
             vae_input, aux_input, z = inputs

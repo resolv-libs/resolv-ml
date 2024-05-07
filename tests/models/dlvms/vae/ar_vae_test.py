@@ -135,6 +135,9 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
                                                                        batch_size=self.config["batch_size"])
         self.assertTrue(predicted_sequences.shape[-1] == self.config["sequence_length"])
         self.assertTrue(latent_codes.shape[-1] == self.config["z_size"])
+        logging.info("Testing model sampling...")
+        latent_codes = loaded_model.sample(num_samples=keras.ops.convert_to_tensor(1000))
+        self.assertTrue(latent_codes.shape == (1000, self.config["z_size"]))
 
     def test_summary_and_plot(self):
         vae_model = self.get_hierarchical_model()
