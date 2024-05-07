@@ -1,5 +1,4 @@
 # TODO - DOC
-
 import keras
 
 from .helpers import training as training_helper
@@ -72,28 +71,29 @@ class SequenceDecoder(keras.Model):
     def decode(self, input_sequence, aux_inputs, z, sampling_probability: float = 1.0, **kwargs):
         raise NotImplementedError("SequenceDecoder.decode must be overridden by subclasses.")
 
-    def sample(self, z, tokens: int = 1, sampling_mode: str = "argmax", temperature: float = 1.0, **kwargs):
+    def sample(self, z, seq_lengths, sampling_mode: str = "argmax", temperature: float = 1.0, **kwargs):
         raise NotImplementedError("SequenceDecoder.sample must be overridden by subclasses.")
 
-    def call(self, inputs, training: bool = False, **kwargs):
-        if training or kwargs.get("evaluate", False):
+    def call(self,
+             inputs,
+             iterations=None,
+             sampling_mode: str = "argmax",
+             temperature: float = 1.0,
+             training: bool = False,
+             evaluate: bool = False,
+             **kwargs):
+        if training or evaluate:
             input_sequence, aux_inputs, z = inputs
             sampling_probability = training_helper.get_sampling_probability(
                 sampling_schedule=self._sampling_schedule,
                 sampling_rate=self._sampling_rate,
-                step=kwargs.pop("iterations", 1),
+                step=iterations or 1,
                 training=training
             )
             return self.decode(input_sequence, aux_inputs, z, sampling_probability, **kwargs)
         else:
-            z = inputs
-            return self.sample(
-                z,
-                tokens=kwargs.pop("tokens", 1),
-                sampling_mode=kwargs.pop("sampling_mode", "argmax"),
-                temperature=kwargs.pop("temperature", 1.0),
-                **kwargs
-            )
+            z, seq_length = inputs
+            return self.sample(z, seq_length, sampling_mode, temperature, **kwargs)
 
     def get_config(self):
         base_config = super().get_config()

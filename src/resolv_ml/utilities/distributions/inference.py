@@ -86,6 +86,18 @@ class SamplingLayer(keras.Layer):
     def compute_output_shape(self, input_shape, **kwargs):
         return input_shape[0], self._z_size
 
-    def call(self, inputs, posterior: tfp_dist.Distribution, training: bool = False, **kwargs):
-        z = posterior.sample() if training or kwargs.pop("evaluate", False) else self._prior.sample()
+    def call(self,
+             inputs,
+             posterior: tfp_dist.Distribution = None,
+             training: bool = False,
+             evaluate: bool = False,
+             **kwargs):
+        if training or evaluate:
+            if not posterior:
+                raise ValueError("A posterior distribution should be provided when using the sampling layer in "
+                                 "training or validation modes.")
+            z = posterior.sample()
+        else:
+            num_sequences = inputs
+            z = self._prior.sample(sample_shape=(num_sequences,))
         return z

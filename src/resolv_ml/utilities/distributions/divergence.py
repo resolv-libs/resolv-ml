@@ -27,17 +27,26 @@ class BetaDivergenceRegularizer(keras.Layer):
         super().build(input_shape)
         self._divergence_layer.build(input_shape)
 
-    def call(self, inputs, posterior: tfp_dist.Distribution, training: bool = False, **kwargs):
-        div = self._divergence_layer(inputs, posterior=posterior, training=training)
-        # Compute the cost according to free_bits
-        free_nats = self._free_bits * k_ops.log(2.0)
-        div_cost = k_ops.maximum(div - free_nats, 0)
-        # Compute beta for beta-VAE
-        div_beta = (1.0 - k_ops.power(self._beta_rate, kwargs.get("iterations", 1))) * self._max_beta
-        # Compute KL across the batch and update trackers
-        div_loss = div_beta * k_ops.mean(div_cost)
-        div_loss_bits = div_loss / k_ops.log(2.0)
-        return div_loss, div_loss_bits, div_beta
+    def call(self,
+             inputs,
+             posterior: tfp_dist.Distribution,
+             iterations=None,
+             training: bool = False,
+             evaluate: bool = False,
+             **kwargs):
+        if training or evaluate:
+            div = self._divergence_layer(inputs, posterior=posterior, training=training)
+            # Compute the cost according to free_bits
+            free_nats = self._free_bits * k_ops.log(2.0)
+            div_cost = k_ops.maximum(div - free_nats, 0)
+            # Compute beta for beta-VAE
+            div_beta = (1.0 - k_ops.power(self._beta_rate, iterations or 1)) * self._max_beta if training else 1.0
+            # Compute KL across the batch and update trackers
+            div_loss = div_beta * k_ops.mean(div_cost)
+            div_loss_bits = div_loss / k_ops.log(2.0)
+            return div_loss, div_loss_bits, div_beta
+        else:
+            return 0., 0., 0.
 
     def compute_output_shape(self, input_shape):
         return (3,)

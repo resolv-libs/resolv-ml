@@ -1,4 +1,5 @@
 import functools
+import logging
 import os
 import unittest
 from pathlib import Path
@@ -81,7 +82,7 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
         model.build(self.get_input_shape())
         return model
 
-    def load_dataset(self) -> tf.data.TFRecordDataset:
+    def load_dataset(self, name: str) -> tf.data.TFRecordDataset:
         def map_fn(ctx, seq):
             input_seq = tf.transpose(seq["pitch_seq"])
             attributes = tf.expand_dims(ctx["toussaint"], axis=-1)
@@ -90,7 +91,7 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
 
         representation = PitchSequenceRepresentation(sequence_length=self.config["sequence_length"])
         tfrecord_loader = TFRecordLoader(
-            file_pattern=f"{self.config['input_dir']}/train_pitchseq.tfrecord",
+            file_pattern=f"{self.config['input_dir']}/{name}.tfrecord",
             parse_fn=functools.partial(
                 representation.parse_example,
                 parse_sequence_feature=True,
@@ -103,6 +104,35 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
             seed=42
         )
         return tfrecord_loader.load_dataset()
+
+    def _test_model(self, vae_model: AttributeRegularizedVAE, output_name: str):
+        vae_model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=0.001),
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            run_eagerly=True
+        )
+        logging.info("Testing model training...")
+        vae_model.fit(
+            self.load_dataset("train_pitchseq"),
+            batch_size=self.config["batch_size"],
+            epochs=1,
+            steps_per_epoch=5
+        )
+        vae_model.save(self.config["output_dir"] / output_name)
+        # TODO - loading VAE with compile=True does not work after training (seems a Keras bug on optimizers)
+        loaded_model = keras.saving.load_model(self.config["output_dir"] / output_name, compile=False)
+        loaded_model.compile(run_eagerly=True)
+        # Use DeepDiff to ignore tuple to list type change in config comparison
+        diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
+        self.assertTrue(not diff)
+        logging.info("Testing model inference...")
+        num_sequences, sequence_length = (32, 64)
+        predicted_sequences = loaded_model.predict(x=keras.ops.convert_to_tensor((num_sequences, sequence_length)))
+        self.assertTrue(predicted_sequences.shape == (32, 64))
+        logging.info("Testing model inference with encoding...")
+        test_sequences = self.load_dataset("test_pitchseq")
+        predicted_sequences = loaded_model.predict(x=test_sequences, batch_size=32)
+        self.assertTrue(predicted_sequences.shape[-1] == 64)
 
     def test_summary_and_plot(self):
         vae_model = self.get_hierarchical_model()
@@ -127,73 +157,25 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
 
     def test_training_default_regularization(self):
         vae_model = self.get_hierarchical_model()
-        vae_model.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=0.001),
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            run_eagerly=True
-        )
-        vae_model.fit(self.load_dataset(), batch_size=self.config["batch_size"], epochs=1, steps_per_epoch=5)
-        vae_model.save(self.config["output_dir"] / "ar_default_reg_trained.keras")
-        # TODO - loading VAE with compile=True does not work (seems a Keras bug)
-        loaded_model = keras.saving.load_model(self.config["output_dir"] / "ar_default_reg_trained.keras",
-                                               compile=False)
-        # Use DeepDiff to ignore tuple to list type change in config comparison
-        diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
-        self.assertTrue(not diff)
+        self._test_model(vae_model, "ar_default_reg_trained.keras")
 
     def test_training_sign_regularization(self):
         vae_model = self.get_hierarchical_model(attribute_regularization_layer=SignAttributeRegularization())
-        vae_model.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=0.001),
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            run_eagerly=True
-        )
-        vae_model.fit(self.load_dataset(), batch_size=self.config["batch_size"], epochs=1, steps_per_epoch=5)
-        vae_model.save(self.config["output_dir"] / "ar_sign_reg_trained.keras")
-        # TODO - loading VAE with compile=True does not work (seems a Keras bug)
-        loaded_model = keras.saving.load_model(self.config["output_dir"] / "ar_sign_reg_trained.keras",
-                                               compile=False)
-        # Use DeepDiff to ignore tuple to list type change in config comparison
-        diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
-        self.assertTrue(not diff)
+        self._test_model(vae_model, "ar_sign_reg_trained.keras")
 
     def test_training_power_transform_regularization_box_cox(self):
         vae_model = self.get_hierarchical_model(
             attribute_regularization_layer=PowerTransformAttributeRegularization(
                 power_transform=BoxCox(lambda_init=0.0, batch_norm=keras.layers.BatchNormalization()))
         )
-        vae_model.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=0.001),
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            run_eagerly=True
-        )
-        vae_model.fit(self.load_dataset(), batch_size=self.config["batch_size"], epochs=1, steps_per_epoch=5)
-        vae_model.save(self.config["output_dir"] / "ar_pt_reg_trained_box_cox.keras")
-        # TODO - loading VAE with compile=True does not work (seems a Keras bug)
-        loaded_model = keras.saving.load_model(self.config["output_dir"] / "ar_pt_reg_trained_box_cox.keras",
-                                               compile=False)
-        # Use DeepDiff to ignore tuple to list type change in config comparison
-        diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
-        self.assertTrue(not diff)
+        self._test_model(vae_model, "ar_pt_reg_trained_box_cox.keras")
 
     def test_training_power_transform_regularization_yeo_johnson(self):
         vae_model = self.get_hierarchical_model(
             attribute_regularization_layer=PowerTransformAttributeRegularization(
                 power_transform=YeoJohnson(batch_norm=keras.layers.BatchNormalization()))
         )
-        vae_model.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=0.001),
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            run_eagerly=True
-        )
-        vae_model.fit(self.load_dataset(), batch_size=self.config["batch_size"], epochs=1, steps_per_epoch=5)
-        vae_model.save(self.config["output_dir"] / "ar_pt_reg_trained_yeo_johnson.keras")
-        # TODO - loading VAE with compile=True does not work (seems a Keras bug)
-        loaded_model = keras.saving.load_model(self.config["output_dir"] / "ar_pt_reg_trained_yeo_johnson.keras",
-                                               compile=False)
-        # Use DeepDiff to ignore tuple to list type change in config comparison
-        diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
-        self.assertTrue(not diff)
+        self._test_model(vae_model, "ar_pt_reg_trained_yeo_johnson.keras")
 
 
 if __name__ == '__main__':

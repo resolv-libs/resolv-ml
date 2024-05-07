@@ -35,11 +35,19 @@ class AttributeRegularizationLayer(keras.Layer):
         if self._batch_normalization and not self._batch_normalization.built:
             self._batch_normalization.build(aux_input_shape)
     
-    def call(self, inputs, posterior: tfp_dist.Distribution, training: bool = False, **kwargs):
-        _, attributes, z, _ = inputs
-        latent_dimension = k_ops.expand_dims(z[:, self._regularization_dimension], axis=-1)
-        reg_loss = self._compute_attribute_regularization_loss(latent_dimension, attributes, training)
-        return self._gamma * reg_loss
+    def call(self,
+             inputs,
+             posterior: tfp_dist.Distribution,
+             training: bool = False,
+             evaluate: bool = False,
+             **kwargs):
+        if training or evaluate:
+            _, attributes, z, _ = inputs
+            latent_dimension = k_ops.expand_dims(z[:, self._regularization_dimension], axis=-1)
+            reg_loss = self._compute_attribute_regularization_loss(latent_dimension, attributes, training)
+            return self._gamma * reg_loss
+        else:
+            return 0.
 
     def get_config(self):
         base_config = super().get_config()

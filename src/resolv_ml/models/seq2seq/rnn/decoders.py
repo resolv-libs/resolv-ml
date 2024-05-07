@@ -100,13 +100,13 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
             decoder_input = self._embedding_layer(ar_token)
         return k_ops.stack(output_sequence_logits, axis=1)
 
-    def sample(self, z, tokens: int = 1, sampling_mode: str = "argmax", temperature: float = 1.0, **kwargs):
+    def sample(self, z, seq_length, sampling_mode: str = "argmax", temperature: float = 1.0, **kwargs):
         batch_size = z.shape[0]
         initial_state = self._initial_state_layer(z, training=False)
         decoder_input = k_ops.zeros(shape=(batch_size, self._output_depth))
         predicted_tokens = []
-        for i in range(tokens):
-            predicted_token, _, _ = self._predict_sequence_token(
+        for i in range(seq_length):
+            predicted_token, _, initial_state = self._predict_sequence_token(
                 rnn_input=k_ops.concatenate([decoder_input, z], axis=-1),
                 initial_state=initial_state,
                 sampling_mode=sampling_mode,
@@ -118,8 +118,13 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
             decoder_input = self._embedding_layer(predicted_token)
         return k_ops.stack(predicted_tokens, axis=1)
 
-    def _predict_sequence_token(self, rnn_input, initial_state=None, temperature: float = 1.0,
-                                sampling_mode: str = "argmax", training: bool = False, **kwargs):
+    def _predict_sequence_token(self,
+                                rnn_input,
+                                initial_state=None,
+                                temperature: float = 1.0,
+                                sampling_mode: str = "argmax",
+                                training: bool = False,
+                                seed: int = None):
         dec_emb_output, output_state = self._stacked_rnn_cells(rnn_input, states=initial_state, training=training)
         output_logits = self._output_projection(dec_emb_output, training=training)
         output_logits = output_logits / temperature
@@ -127,7 +132,7 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
         if sampling_mode == "argmax":
             predicted_token = keras.ops.argmax(token_probabilities, axis=-1)
         elif sampling_mode == "categorical":
-            predicted_token = keras.random.categorical(output_logits, 1, seed=kwargs.get("seed", None))
+            predicted_token = keras.random.categorical(output_logits, 1, seed=seed)
         else:
             raise NotImplementedError(f"Sampling mode {sampling_mode} is not implemented.")
         return predicted_token, output_logits, output_state
@@ -240,18 +245,18 @@ class HierarchicalRNNDecoder(SequenceDecoder):
         output_sequence = self._hierarchical_decode(z, base_fn=base_decode, training=True)
         return k_ops.concatenate(output_sequence, axis=1)
 
-    def sample(self, z, sampling_mode: str = "argmax", temperature: float = 1.0, **kwargs):
+    def sample(self, z, seq_length, sampling_mode: str = "argmax", temperature: float = 1.0, **kwargs):
+        # TODO - add support for custom sequence lengths
 
         def base_sample(embedding, _):
             return self._core_decoder.sample(
                 z=embedding,
-                tokens=self._level_lengths[-1],
+                seq_length=self._level_lengths[-1],
                 sampling_mode=sampling_mode,
                 temperature=temperature,
                 **kwargs
             )
 
-        kwargs.pop("tokens", None)  # TODO - add support for single time step in hierarchical sampling
         output_sequence = self._hierarchical_decode(z, base_fn=base_sample, training=False)
         return k_ops.concatenate(output_sequence, axis=1)
 

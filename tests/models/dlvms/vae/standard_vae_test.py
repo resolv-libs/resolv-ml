@@ -1,4 +1,5 @@
 import functools
+import logging
 import os
 import unittest
 from pathlib import Path
@@ -122,6 +123,35 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
         )
         return tfrecord_loader.load_dataset()
 
+    def _test_model(self, vae_model: StandardVAE, output_name: str):
+        vae_model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=0.001),
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            run_eagerly=True
+        )
+        logging.info("Testing model training...")
+        vae_model.fit(
+            self.load_dataset("train_pitchseq"),
+            batch_size=self.config["batch_size"],
+            epochs=1,
+            steps_per_epoch=5
+        )
+        vae_model.save(self.config["output_dir"] / output_name)
+        # TODO - loading VAE with compile=True does not work after training (seems a Keras bug on optimizers)
+        loaded_model = keras.saving.load_model(self.config["output_dir"] / output_name, compile=False)
+        loaded_model.compile(run_eagerly=True)
+        # Use DeepDiff to ignore tuple to list type change in config comparison
+        diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
+        self.assertTrue(not diff)
+        logging.info("Testing model inference...")
+        num_sequences, sequence_length = (32, 64)
+        predicted_sequences = loaded_model.predict(x=keras.ops.convert_to_tensor((num_sequences, sequence_length)))
+        self.assertTrue(predicted_sequences.shape == (32, 64))
+        logging.info("Testing model inference with encoding...")
+        test_sequences = self.load_dataset("test_pitchseq")
+        predicted_sequences = loaded_model.predict(x=test_sequences, batch_size=32)
+        self.assertTrue(predicted_sequences.shape[-1] == 64)
+
     def test_ar_seq2seq_vae_summary_and_plot(self):
         vae_model = self.get_autoregressive_model()
         vae_model.print_summary(self.get_input_shape(), expand_nested=True)
@@ -145,26 +175,7 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
 
     def test_ar_seq2seq_vae_training(self):
         vae_model = self.get_autoregressive_model()
-        vae_model.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=0.001),
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            metrics=[keras.metrics.SparseCategoricalAccuracy(), keras.metrics.SparseTopKCategoricalAccuracy()],
-            run_eagerly=True
-        )
-        vae_model.fit(
-            self.load_dataset("train_pitchseq"),
-            validation_data=self.load_dataset("validation_pitchseq"),
-            batch_size=self.config["batch_size"],
-            epochs=1,
-            steps_per_epoch=5
-        )
-        vae_model.save(self.config["output_dir"] / "ar_seq2seq_vae_trained.keras")
-        # TODO - loading VAE with compile=True does not work (seems a Keras bug)
-        loaded_model = keras.saving.load_model(self.config["output_dir"] / "ar_seq2seq_vae_trained.keras",
-                                               compile=False)
-        # Use DeepDiff to ignore tuple to list type change in config comparison
-        diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
-        self.assertTrue(not diff)
+        self._test_model(vae_model, "ar_seq2seq_vae_trained.keras")
 
     def test_hier_seq2seq_vae_save_and_loading(self):
         vae_model = self.get_autoregressive_model()
@@ -176,33 +187,7 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
 
     def test_hier_seq2seq_vae_training(self):
         vae_model = self.get_hierarchical_model()
-        vae_model.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=0.001),
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            run_eagerly=True
-        )
-        vae_model.fit(
-            self.load_dataset("train_pitchseq"),
-            validation_data=self.load_dataset("validation_pitchseq"),
-            batch_size=self.config["batch_size"],
-            epochs=1,
-            steps_per_epoch=5
-        )
-        vae_model.save(self.config["output_dir"] / "hier_seq2seq_vae_trained.keras")
-        # TODO - loading VAE with compile=True does not work (seems a Keras bug)
-        loaded_model = keras.saving.load_model(self.config["output_dir"] / "hier_seq2seq_vae_trained.keras",
-                                               compile=False)
-        # Use DeepDiff to ignore tuple to list type change in config comparison
-        diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
-        self.assertTrue(not diff)
-
-    def test_hier_seq2seq_vae_inference(self):
-        # TODO - loading VAE with compile=True does not work (seems a Keras bug)
-        loaded_model = keras.saving.load_model(self.config["output_dir"] / "hier_seq2seq_vae_trained.keras",
-                                               compile=False)
-        latent_codes = tf.keras.backend.random_normal(shape=(self.config["batch_size"], self.config["z_size"]))
-        predicted_sequences = loaded_model.predict(latent_codes)
-        self.assertTrue(predicted_sequences.shape == (self.config["batch_size"], self.config["sequence_length"]))
+        self._test_model(vae_model, "ar_seq2seq_vae_trained.keras")
 
 
 if __name__ == '__main__':
