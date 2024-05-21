@@ -73,7 +73,7 @@ class ExponentialScheduler(FunctionScheduler):
         )
 
     def _growth_fn(self, step: int) -> float:
-        return 1 - self._decay_fn(step)
+        return (1 - keras.ops.power(self._rate, step)) * (self._max_value - self._min_value) + self._min_value
 
     def _decay_fn(self, step: int) -> float:
         return keras.ops.power(self._rate, step) * (self._max_value - self._min_value) + self._min_value
