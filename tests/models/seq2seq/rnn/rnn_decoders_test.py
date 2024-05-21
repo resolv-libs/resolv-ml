@@ -58,10 +58,10 @@ class TestRNNAutoregressiveDecoder(unittest.TestCase):
         self.assertTrue(outputs.shape == expected_out_shape)
 
     def test_sampling(self):
-        expected_out_shape_decode = (self.config["batch_size"],)
+        expected_out_shape_decode = (self.config["batch_size"], self.config["seq_length"])
         _, _, z_input = self.get_input_data_sample()
         decoder = self.get_decoder()
-        outputs = decoder(z_input, training=False)
+        outputs = decoder((z_input, keras.ops.convert_to_tensor(self.config["seq_length"])), training=False)
         self.assertTrue(outputs.shape == expected_out_shape_decode)
 
     def test_saving_and_loading(self):
@@ -129,10 +129,10 @@ class TestHierarchicalRNNDecoder(unittest.TestCase):
         self.assertTrue(outputs.shape == expected_out_shape)
 
     def test_sampling(self):
-        expected_out_shape_decode = (self.config["batch_size"],)
+        expected_out_shape_decode = (self.config["batch_size"], self.config["seq_length"])
         _, _, z_input = self.get_input_data_sample()
         decoder = self.get_decoder()
-        outputs = decoder(z_input, training=False)
+        outputs = decoder((z_input, keras.ops.convert_to_tensor(self.config["seq_length"])), training=False)
         self.assertTrue(outputs.shape == expected_out_shape_decode)
 
     def test_saving_and_loading(self):

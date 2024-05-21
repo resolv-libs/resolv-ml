@@ -14,6 +14,7 @@ from resolv_ml.models.dlvm.vae.vanilla_vae import StandardVAE
 from resolv_ml.models.seq2seq.rnn import encoders, decoders
 from resolv_ml.training.callbacks import LearningRateLoggerCallback
 from resolv_ml.training.trainer import Trainer
+from resolv_ml.utilities.schedulers import get_scheduler
 
 
 class TestTrainer(unittest.TestCase):
@@ -53,12 +54,28 @@ class TestTrainer(unittest.TestCase):
                 core_decoder=decoders.RNNAutoregressiveDecoder(
                     dec_rnn_sizes=[16, 16],
                     num_classes=130,
-                    embedding_layer=keras.layers.Embedding(130, 70, name="decoder_embedding")
+                    embedding_layer=keras.layers.Embedding(130, 70, name="decoder_embedding"),
+                    sampling_scheduler=get_scheduler(
+                        schedule_type="sigmoid",
+                        schedule_config={
+                            "rate": 200,
+                            "min_value": 0.0,
+                            "max_value": 1.0,
+                            "decay": False
+                        }
+                    )
                 ),
                 dec_rnn_sizes=[16, 16],
             ),
-            max_beta=1.0,
-            beta_rate=0.0,
+            div_beta_scheduler=get_scheduler(
+                schedule_type="exponential",
+                schedule_config={
+                    "rate": 0.999,
+                    "min_value": 0.0,
+                    "max_value": 0.3,
+                    "decay": False
+                }
+            ),
             free_bits=0.0
         )
         model.build(self.get_input_shape())
@@ -74,10 +91,26 @@ class TestTrainer(unittest.TestCase):
             generative_layer=decoders.RNNAutoregressiveDecoder(
                 dec_rnn_sizes=[16, 16],
                 num_classes=130,
-                embedding_layer=keras.layers.Embedding(130, 70, name="decoder_embedding")
+                embedding_layer=keras.layers.Embedding(130, 70, name="decoder_embedding"),
+                sampling_scheduler=get_scheduler(
+                    schedule_type="sigmoid",
+                    schedule_config={
+                        "rate": 200,
+                        "min_value": 0.0,
+                        "max_value": 1.0,
+                        "decay": False
+                    }
+                )
             ),
-            max_beta=1.0,
-            beta_rate=0.0,
+            div_beta_scheduler=get_scheduler(
+                schedule_type="exponential",
+                schedule_config={
+                    "rate": 0.999,
+                    "min_value": 0.0,
+                    "max_value": 0.3,
+                    "decay": False
+                }
+            ),
             free_bits=0.0
         )
         model.build(self.get_input_shape())

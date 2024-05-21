@@ -1,7 +1,7 @@
 # TODO - DOC
 import keras
 
-from .helpers import training as training_helper
+from ...utilities.schedulers import Scheduler
 
 
 @keras.saving.register_keras_serializable(package="SequenceEncoders", name="SequenceEncoder")
@@ -59,14 +59,12 @@ class SequenceDecoder(keras.Model):
 
     def __init__(self,
                  embedding_layer: keras.Layer = None,
-                 sampling_schedule: str = "constant",
-                 sampling_rate: float = 0.0,
+                 sampling_scheduler: Scheduler = None,
                  name: str = "seq_decoder",
                  **kwargs):
         super(SequenceDecoder, self).__init__(name=name, **kwargs)
         self._embedding_layer = embedding_layer
-        self._sampling_schedule = sampling_schedule
-        self._sampling_rate = sampling_rate
+        self._sampling_scheduler = sampling_scheduler
 
     def decode(self, input_sequence, aux_inputs, z, sampling_probability: float = 1.0, **kwargs):
         raise NotImplementedError("SequenceDecoder.decode must be overridden by subclasses.")
@@ -84,12 +82,8 @@ class SequenceDecoder(keras.Model):
              **kwargs):
         if training or evaluate:
             input_sequence, aux_inputs, z = inputs
-            sampling_probability = training_helper.get_sampling_probability(
-                sampling_schedule=self._sampling_schedule,
-                sampling_rate=self._sampling_rate,
-                step=iterations or 1,
-                training=training
-            )
+            sampling_probability = self._sampling_scheduler(step=iterations) \
+                if training and self._sampling_scheduler else 1.0
             return self.decode(input_sequence, aux_inputs, z, sampling_probability, **kwargs)
         else:
             z, seq_length = inputs
@@ -99,8 +93,7 @@ class SequenceDecoder(keras.Model):
         base_config = super().get_config()
         config = {
             "embedding_layer": keras.saving.serialize_keras_object(self._embedding_layer),
-            "sampling_schedule": self._sampling_schedule,
-            "sampling_rate": self._sampling_rate
+            "sampling_scheduler": self._sampling_scheduler
         }
         return {**base_config, **config}
 

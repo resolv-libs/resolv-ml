@@ -7,6 +7,7 @@ from keras import ops as k_ops
 
 from . import layers as rnn_layers
 from ..base import SequenceDecoder
+from ....utilities.schedulers import Scheduler
 
 
 @keras.saving.register_keras_serializable(package="SequenceDecoders", name="RNNAutoregressiveDecoder")
@@ -19,14 +20,12 @@ class RNNAutoregressiveDecoder(SequenceDecoder):
                  output_projection_layer: keras.Layer = None,
                  embedding_layer: keras.Layer = None,
                  dropout: float = 0.0,
-                 sampling_schedule: str = "constant",
-                 sampling_rate: float = 0.0,
+                 sampling_scheduler: Scheduler = None,
                  name: str = "autoregressive_decoder",
                  **kwargs):
         super(RNNAutoregressiveDecoder, self).__init__(
             embedding_layer=embedding_layer,
-            sampling_schedule=sampling_schedule,
-            sampling_rate=sampling_rate,
+            sampling_scheduler=sampling_scheduler,
             name=name,
             **kwargs
         )
@@ -173,13 +172,11 @@ class HierarchicalRNNDecoder(SequenceDecoder):
                  dec_rnn_sizes: List[int],
                  rnn_cell: Any = None,
                  dropout: float = 0.0,
-                 sampling_schedule: str = "constant",
-                 sampling_rate: float = 0.0,
+                 sampling_scheduler: Scheduler = None,
                  name="hierarchical_decoder",
                  **kwargs):
         super(HierarchicalRNNDecoder, self).__init__(
-            sampling_schedule=sampling_schedule,
-            sampling_rate=sampling_rate,
+            sampling_scheduler=sampling_scheduler,
             name=name,
             **kwargs
         )

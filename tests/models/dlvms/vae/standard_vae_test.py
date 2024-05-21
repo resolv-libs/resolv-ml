@@ -12,6 +12,7 @@ from resolv_pipelines.data.representation.mir import PitchSequenceRepresentation
 
 from resolv_ml.models.dlvm.vae.vanilla_vae import StandardVAE
 from resolv_ml.models.seq2seq.rnn import encoders, decoders
+from resolv_ml.utilities.schedulers import get_scheduler
 
 
 class Seq2SeqStandardVAETest(unittest.TestCase):
@@ -31,10 +32,21 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
             "level_lengths": [4, 4, 4],
             "dropout": 0.0,
             "z_size": 128,
-            "sampling_schedule": "constant",
-            "sampling_rate": 0.0,
-            "max_beta": 1.0,
-            "beta_rate": 0.0,
+            "sampling_scheduler": {
+                "type": "constant",
+                "config": {
+                    "value": 0.5
+                }
+            },
+            "div_beta_scheduler": {
+                "type": "exponential",
+                "config": {
+                    "rate": 0.0,
+                    "min_value": 0.0,
+                    "max_value": 1.0,
+                    "decay": False,
+                }
+            },
             "free_bits": 0.0
         }
 
@@ -63,11 +75,15 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
                 num_classes=self.config["vocabulary_size"],
                 embedding_layer=self.get_embedding_layer("decoder_embedding"),
                 dropout=self.config["dropout"],
-                sampling_schedule=self.config["sampling_schedule"],
-                sampling_rate=self.config["sampling_rate"]
+                sampling_scheduler=get_scheduler(
+                    schedule_type=self.config["sampling_scheduler"]["type"],
+                    schedule_config=self.config["sampling_scheduler"]["config"]
+                )
             ),
-            max_beta=self.config["max_beta"],
-            beta_rate=self.config["beta_rate"],
+            div_beta_scheduler=get_scheduler(
+                schedule_type=self.config["div_beta_scheduler"]["type"],
+                schedule_config=self.config["div_beta_scheduler"]["config"]
+            ),
             free_bits=self.config["free_bits"]
         )
         model.build(self.get_input_shape())
@@ -88,14 +104,18 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
                     num_classes=self.config["vocabulary_size"],
                     embedding_layer=self.get_embedding_layer("decoder_embedding"),
                     dropout=self.config["dropout"],
-                    sampling_schedule=self.config["sampling_schedule"],
-                    sampling_rate=self.config["sampling_rate"]
+                    sampling_scheduler=get_scheduler(
+                        schedule_type=self.config["sampling_scheduler"]["type"],
+                        schedule_config=self.config["sampling_scheduler"]["config"]
+                    )
                 ),
                 dec_rnn_sizes=self.config["dec_rnn_sizes"],
                 dropout=self.config["dropout"]
             ),
-            max_beta=self.config["max_beta"],
-            beta_rate=self.config["beta_rate"],
+            div_beta_scheduler=get_scheduler(
+                schedule_type=self.config["div_beta_scheduler"]["type"],
+                schedule_config=self.config["div_beta_scheduler"]["config"]
+            ),
             free_bits=self.config["free_bits"]
         )
         model.build(self.get_input_shape())

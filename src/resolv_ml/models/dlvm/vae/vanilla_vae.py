@@ -1,11 +1,14 @@
 # TODO - DOC
 # TODO - add multi-backend support for probability distributions
+
 import keras
 from tensorflow_probability import distributions as tfp_dist
 
 from .base import VAE
-from ....utilities.distributions.divergence import BetaDivergenceRegularizer, KLDivergence
+from ....utilities.distributions.divergence import KLDivergence
 from ....utilities.distributions.inference import GaussianInference, SamplingLayer
+from ....utilities.regularizers.divergence import DivergenceRegularizer
+from ....utilities.schedulers import Scheduler
 
 
 @keras.saving.register_keras_serializable(package="VAE", name="StandardVAE")
@@ -17,20 +20,17 @@ class StandardVAE(VAE):
                  generative_layer: keras.Layer,
                  mean_inference_layer: keras.Layer = None,
                  sigma_inference_layer: keras.Layer = None,
-                 max_beta: float = 1.0,
-                 beta_rate: float = 0.0,
+                 div_beta_scheduler: Scheduler = None,
                  free_bits: float = 0.0,
                  name: str = "standard_vae",
                  **kwargs):
         self._z_size = z_size
-        self._max_beta = max_beta
-        self._beta_rate = beta_rate
+        self._div_beta_scheduler = div_beta_scheduler
         self._free_bits = free_bits
         self._mean_inference_layer = mean_inference_layer
         self._sigma_inference_layer = sigma_inference_layer
-        self.div_loss_tracker = keras.metrics.Mean(name="kl_loss")
-        self.div_bits_tracker = keras.metrics.Mean(name="kl_bits")
-        self.div_beta_tracker = keras.metrics.Mean(name="kl_beta")
+        self._div_loss_tracker = keras.metrics.Mean(name="kl_loss")
+        self._div_beta_tracker = keras.metrics.Mean(name="kl_beta")
         prior = tfp_dist.MultivariateNormalDiag(loc=keras.ops.zeros(z_size), scale_diag=keras.ops.ones(z_size))
         super(StandardVAE, self).__init__(
             input_processing_layer=input_processing_layer,
@@ -42,12 +42,13 @@ class StandardVAE(VAE):
                 name="gaussian_inference",
             ),
             sampling_layer=SamplingLayer(z_size=z_size, prior=prior),
-            regularization_layers=[BetaDivergenceRegularizer(
-                divergence_layer=KLDivergence(prior=prior),
-                max_beta=max_beta,
-                beta_rate=beta_rate,
-                free_bits=free_bits
-            )],
+            regularization_layers=[
+                DivergenceRegularizer(
+                    divergence_layer=KLDivergence(prior=prior),
+                    beta_scheduler=div_beta_scheduler,
+                    free_bits=free_bits
+                )
+            ],
             name=name,
             **kwargs
         )
@@ -56,18 +57,16 @@ class StandardVAE(VAE):
         super().build(input_shape)
 
     def _add_regularization_losses(self, regularization_losses):
-        div_loss, div_loss_bits, div_beta = regularization_losses[0]
+        div_loss, div_beta = regularization_losses[0]
         self.add_loss(div_loss)
-        self.div_loss_tracker.update_state(div_loss)
-        self.div_bits_tracker.update_state(div_loss_bits)
-        self.div_beta_tracker.update_state(div_beta)
+        self._div_loss_tracker.update_state(div_loss)
+        self._div_beta_tracker.update_state(div_beta)
         
     def get_config(self):
         base_config = super().get_config()
         config = {
             "z_size": self._z_size,
-            "max_beta": self._max_beta,
-            "beta_rate": self._beta_rate,
+            "div_beta_scheduler": keras.saving.serialize_keras_object(self._div_beta_scheduler),
             "free_bits": self._free_bits,
             "input_processing_layer": keras.saving.serialize_keras_object(self._input_processing_layer),
             "mean_inference_layer": keras.saving.serialize_keras_object(self._mean_inference_layer),
@@ -82,10 +81,12 @@ class StandardVAE(VAE):
         mean_inference_layer = keras.saving.deserialize_keras_object(config.pop("mean_inference_layer"))
         sigma_inference_layer = keras.saving.deserialize_keras_object(config.pop("sigma_inference_layer"))
         generative_layer = keras.saving.deserialize_keras_object(config.pop("generative_layer"))
+        div_beta_scheduler = keras.saving.deserialize_keras_object(config.pop("div_beta_scheduler"))
         return cls(
             input_processing_layer=input_processing_layer,
             mean_inference_layer=mean_inference_layer,
             sigma_inference_layer=sigma_inference_layer,
             generative_layer=generative_layer,
+            div_beta_scheduler=div_beta_scheduler,
             **config
         )
