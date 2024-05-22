@@ -29,8 +29,9 @@ class StandardVAE(VAE):
         self._free_bits = free_bits
         self._mean_inference_layer = mean_inference_layer
         self._sigma_inference_layer = sigma_inference_layer
-        self._div_loss_tracker = keras.metrics.Mean(name="kl_loss")
-        self._div_beta_tracker = keras.metrics.Mean(name="kl_beta")
+        self._kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
+        self._kl_beta_tracker = keras.metrics.Mean(name="kl_beta")
+        self._kl_loss_weighted_tracker = keras.metrics.Mean(name="kl_loss_weighted")
         prior = tfp_dist.MultivariateNormalDiag(loc=keras.ops.zeros(z_size), scale_diag=keras.ops.ones(z_size))
         super(StandardVAE, self).__init__(
             input_processing_layer=input_processing_layer,
@@ -57,10 +58,12 @@ class StandardVAE(VAE):
         super().build(input_shape)
 
     def _add_regularization_losses(self, regularization_losses):
-        div_loss, div_beta = regularization_losses[0]
-        self.add_loss(div_loss)
-        self._div_loss_tracker.update_state(div_loss)
-        self._div_beta_tracker.update_state(div_beta)
+        kl_loss, kl_beta = regularization_losses[0]
+        weighted_kl_loss = kl_beta * kl_loss
+        self.add_loss(weighted_kl_loss)
+        self._kl_loss_tracker.update_state(kl_loss)
+        self._kl_beta_tracker.update_state(kl_beta)
+        self._kl_loss_weighted_tracker.update_state(weighted_kl_loss)
         
     def get_config(self):
         base_config = super().get_config()
