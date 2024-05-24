@@ -13,6 +13,9 @@ class ConstantScheduler(Scheduler):
     def __call__(self, step: int):
         return self._value
 
+    def final_value(self) -> float:
+        return self._value
+
     def get_config(self):
         base_config = super().get_config()
         return {
@@ -33,12 +36,14 @@ class LinearScheduler(FunctionScheduler):
                  min_value: float = 0.0,
                  max_value: float = None,
                  decay: bool = False,
+                 total_steps: int = None,
                  name: str = "linear_scheduler"):
         super(LinearScheduler, self).__init__(
             rate=rate,
             min_value=min_value,
             max_value=max_value,
             decay=decay,
+            total_steps=total_steps,
             name=name
         )
 

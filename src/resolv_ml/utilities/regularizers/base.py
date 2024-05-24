@@ -18,12 +18,14 @@ class Regularizer(keras.Layer):
     def call(self,
              inputs,
              posterior: tfp_dist.Distribution,
-             iterations=None,
+             current_step=None,
              training: bool = False,
              evaluate: bool = False,
              **kwargs):
         if training or evaluate:
-            beta = self._beta_scheduler(step=iterations) if self._beta_scheduler and training else 1.0
+            beta = 1.0
+            if self._beta_scheduler:
+                beta = self._beta_scheduler(step=current_step) if training else self._beta_scheduler.final_value()
             reg_loss = self._compute_regularization_loss(inputs, posterior, training, evaluate)
             return reg_loss, beta
         else:

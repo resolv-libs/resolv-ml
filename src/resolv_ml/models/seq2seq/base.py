@@ -74,7 +74,7 @@ class SequenceDecoder(keras.Model):
 
     def call(self,
              inputs,
-             iterations=None,
+             current_step=None,
              sampling_mode: str = "argmax",
              temperature: float = 1.0,
              training: bool = False,
@@ -82,7 +82,7 @@ class SequenceDecoder(keras.Model):
              **kwargs):
         if training or evaluate:
             input_sequence, aux_inputs, z = inputs
-            sampling_probability = self._sampling_scheduler(step=iterations) \
+            sampling_probability = self._sampling_scheduler(step=current_step) \
                 if training and self._sampling_scheduler else 1.0
             return self.decode(input_sequence, aux_inputs, z, sampling_probability, **kwargs)
         else:

@@ -45,7 +45,7 @@ class VAE(keras.Model):
     def call(self, inputs, training: bool = False, **kwargs):
         if training or self._evaluation_mode:
             vae_input, aux_input = inputs
-            iterations = self.optimizer.iterations + 1
+            current_step = self.optimizer.iterations + 1
             z, posterior_dist = self.encode(inputs=(vae_input, aux_input),
                                             training=training,
                                             evaluate=self._evaluation_mode,
@@ -53,7 +53,7 @@ class VAE(keras.Model):
             outputs = self.decode(inputs=(vae_input, aux_input, z),
                                   training=training,
                                   evaluate=self._evaluation_mode,
-                                  iterations=iterations,
+                                  current_step=current_step,
                                   **kwargs)
             regularization_losses = []
             if self._regularization_layers:
@@ -63,7 +63,7 @@ class VAE(keras.Model):
                                                             posterior=posterior_dist,
                                                             training=training,
                                                             evaluate=self._evaluation_mode,
-                                                            iterations=iterations)
+                                                            current_step=current_step)
                     regularization_losses.append(layer_reg_losses)
                 self._add_regularization_losses(regularization_losses)
             return outputs
@@ -97,12 +97,12 @@ class VAE(keras.Model):
         z = self._sampling_layer(num_samples, training=training, evaluate=evaluate, **kwargs)
         return z
 
-    def decode(self, inputs, iterations=None, training: bool = False, evaluate: bool = False, **kwargs):
+    def decode(self, inputs, current_step=None, training: bool = False, evaluate: bool = False, **kwargs):
         if training or evaluate:
             vae_input, aux_input, z = inputs
             return self._generative_layer(inputs=(vae_input, aux_input, z),
                                           training=training,
-                                          iterations=keras.ops.convert_to_tensor(iterations or 1),
+                                          current_step=keras.ops.convert_to_tensor(current_step or 1),
                                           evaluate=keras.ops.convert_to_tensor(evaluate),
                                           **kwargs)
         else:
