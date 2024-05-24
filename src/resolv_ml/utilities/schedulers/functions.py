@@ -66,6 +66,7 @@ class ExponentialScheduler(FunctionScheduler):
                  min_value: float = 0.0,
                  max_value: float = None,
                  decay: bool = False,
+                 total_steps: int = None,
                  name: str = "exponential_scheduler"):
         if not 0 <= rate < 1:
             raise ValueError(f'`exponential_scheduler` rate must be in the interval [0, 1). Got {rate}.')
@@ -74,6 +75,7 @@ class ExponentialScheduler(FunctionScheduler):
             min_value=min_value,
             max_value=max_value,
             decay=decay,
+            total_steps=total_steps,
             name=name
         )
 
@@ -96,6 +98,7 @@ class SigmoidScheduler(FunctionScheduler):
                  min_value: float = 0.0,
                  max_value: float = None,
                  decay: bool = False,
+                 total_steps: int = None,
                  name: str = "sigmoid_scheduler"):
         if rate < 1:
             raise ValueError(f'`sigmoid_scheduler` rate must be at least 1. Got {rate}.')
@@ -104,6 +107,7 @@ class SigmoidScheduler(FunctionScheduler):
             min_value=min_value,
             max_value=max_value,
             decay=decay,
+            total_steps=total_steps,
             name=name
         )
 
