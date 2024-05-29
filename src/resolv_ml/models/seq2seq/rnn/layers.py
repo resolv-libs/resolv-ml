@@ -128,24 +128,25 @@ class StackedBidirectionalRNN(keras.Layer):
 
     @property
     def state_size(self):
-        return [self._layers[0].forward_layer.state_size, self._layers[0].backward_layer.state_size]
+        return [self._bidirectional_layers[0].forward_layer.state_size,
+                self._bidirectional_layers[0].backward_layer.state_size]
 
     def build(self, input_shape):
         super().build(input_shape)
-        for i, layer in enumerate(self._layers):
+        for i, layer in enumerate(self._bidirectional_layers):
             layer.build(input_shape)
             output_shape = layer.compute_output_shape(input_shape)
             input_shape, _ = output_shape[0], output_shape[1:]
 
     def call(self, inputs, initial_state=None, training: bool = False, **kwargs):
         if (initial_state and
-                (not isinstance(initial_state, list) or len(initial_state) != len(self._layers))):
+                (not isinstance(initial_state, list) or len(initial_state) != len(self._bidirectional_layers))):
             raise ValueError("initial_states_fw must be a list of state tensors (one per layer).")
 
         layers_states = []
         prev_output = inputs
         last_merge_mode = None
-        for idx, layer in enumerate(self._layers):
+        for idx, layer in enumerate(self._bidirectional_layers):
             layer_outputs = layer(prev_output, initial_state=initial_state, mask=kwargs.get("mask"), training=training)
             if layer.merge_mode:
                 prev_output, fw_h, fw_c, bw_h, bw_c = layer_outputs
@@ -165,7 +166,7 @@ class StackedBidirectionalRNN(keras.Layer):
         state_shape = None
         merge_mode = None
 
-        for layer in self._layers:
+        for layer in self._bidirectional_layers:
             merge_mode = layer.merge_mode
             output_shape = layer.compute_output_shape(output_shape, initial_state_shape)
             if not merge_mode:
@@ -181,8 +182,8 @@ class StackedBidirectionalRNN(keras.Layer):
         return tuple(output_shape)
 
     def get_initial_state(self, batch_size):
-        return [self._layers[0].forward_layer.get_initial_state(batch_size),
-                self._layers[0].backward_layer.state_size.get_initial_state(batch_size)]
+        return [self._bidirectional_layers[0].forward_layer.get_initial_state(batch_size),
+                self._bidirectional_layers[0].backward_layer.state_size.get_initial_state(batch_size)]
 
     def get_config(self):
         base_config = super().get_config()
