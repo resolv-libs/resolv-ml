@@ -103,11 +103,11 @@ class StackedBidirectionalRNN(keras.Layer):
         self._return_sequences = return_sequences
         self._return_state = return_state
         self._dropout = dropout
-        self._layers: List[keras.layers.Bidirectional] = []
+        self._bidirectional_layers: List[keras.layers.Bidirectional] = []
         for i, layer_size in enumerate(layers_sizes):
             is_output_layer = (i == len(layers_sizes) - 1)
             is_return_sequences_layer = return_sequences if is_output_layer else True
-            self._layers.append(
+            self._bidirectional_layers.append(
                 keras.layers.Bidirectional(
                     layer=keras.layers.RNN(
                         rnn_cell if rnn_cell else get_default_rnn_cell(layer_size, dropout, name=f"lstm_{i}"),
