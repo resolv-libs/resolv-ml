@@ -171,7 +171,7 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
         self.assertTrue(predicted_sequences.shape == (num_sequences, sequence_length))
         logging.info("Testing model inference with encoding...")
         test_sequences = self.load_dataset("test_pitchseq")
-        predicted_sequences, latent_codes, _, _ = loaded_model.predict(x=test_sequences,
+        predicted_sequences, latent_codes, _, _, _ = loaded_model.predict(x=test_sequences,
                                                                        batch_size=self.config["batch_size"])
         self.assertTrue(predicted_sequences.shape[-1] == self.config["sequence_length"])
         self.assertTrue(latent_codes.shape[-1] == self.config["z_size"])

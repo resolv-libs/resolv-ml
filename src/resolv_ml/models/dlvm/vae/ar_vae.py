@@ -13,6 +13,7 @@ class AttributeRegularizedVAE(StandardVAE):
                  z_size: int,
                  input_processing_layer: keras.Layer,
                  generative_layer: keras.Layer,
+                 attribute_processing_layer: keras.Layer,
                  attribute_regularization_layer: AttributeRegularizer,
                  mean_inference_layer: keras.Layer = None,
                  sigma_inference_layer: keras.Layer = None,
@@ -20,6 +21,7 @@ class AttributeRegularizedVAE(StandardVAE):
                  free_bits: float = 0.0,
                  name: str = "ar_vae",
                  **kwargs):
+        self._attribute_processing_layer = attribute_processing_layer
         self._attribute_regularization_layer = attribute_regularization_layer
         self._attr_loss_tracker = keras.metrics.Mean(name=attribute_regularization_layer.regularization_name)
         self._attr_gamma_tracker = keras.metrics.Mean(
@@ -31,6 +33,7 @@ class AttributeRegularizedVAE(StandardVAE):
         super(AttributeRegularizedVAE, self).__init__(
             z_size=z_size,
             input_processing_layer=input_processing_layer,
+            aux_input_processing_layer=attribute_processing_layer,
             generative_layer=generative_layer,
             mean_inference_layer=mean_inference_layer,
             sigma_inference_layer=sigma_inference_layer,
@@ -39,7 +42,7 @@ class AttributeRegularizedVAE(StandardVAE):
             name=name,
             **kwargs
         )
-        self._regularization_layers.append(attribute_regularization_layer)
+        self._regularization_layers["attr_reg"] = attribute_regularization_layer
 
     def _add_regularization_losses(self, regularization_losses):
         super()._add_regularization_losses(regularization_losses)
@@ -53,6 +56,7 @@ class AttributeRegularizedVAE(StandardVAE):
     def get_config(self):
         base_config = super().get_config()
         config = {
+            "attribute_processing_layer": keras.saving.serialize_keras_object(self._attribute_processing_layer),
             "attribute_regularization_layer": keras.saving.serialize_keras_object(self._attribute_regularization_layer)
         }
         return {**base_config, **config}
@@ -63,12 +67,14 @@ class AttributeRegularizedVAE(StandardVAE):
         mean_inference_layer = keras.saving.deserialize_keras_object(config.pop("mean_inference_layer"))
         sigma_inference_layer = keras.saving.deserialize_keras_object(config.pop("sigma_inference_layer"))
         generative_layer = keras.saving.deserialize_keras_object(config.pop("generative_layer"))
+        attribute_proc_layer = keras.saving.deserialize_keras_object(config.pop("attribute_processing_layer"))
         attribute_reg_layer = keras.saving.deserialize_keras_object(config.pop("attribute_regularization_layer"))
         return cls(
             input_processing_layer=input_processing_layer,
             mean_inference_layer=mean_inference_layer,
             sigma_inference_layer=sigma_inference_layer,
             generative_layer=generative_layer,
+            attribute_processing_layer=attribute_proc_layer,
             attribute_regularization_layer=attribute_reg_layer,
             **config
         )

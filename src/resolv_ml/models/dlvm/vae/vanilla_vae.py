@@ -18,6 +18,7 @@ class StandardVAE(VAE):
                  z_size: int,
                  input_processing_layer: keras.Layer,
                  generative_layer: keras.Layer,
+                 aux_input_processing_layer: keras.Layer = None,
                  mean_inference_layer: keras.Layer = None,
                  sigma_inference_layer: keras.Layer = None,
                  div_beta_scheduler: Scheduler = None,
@@ -43,13 +44,14 @@ class StandardVAE(VAE):
                 name="gaussian_inference",
             ),
             sampling_layer=SamplingLayer(z_size=z_size, prior=prior),
-            regularization_layers=[
-                DivergenceRegularizer(
+            aux_input_processing_layer=aux_input_processing_layer,
+            regularization_layers={
+                "kld": DivergenceRegularizer(
                     divergence_layer=KLDivergence(prior=prior),
                     beta_scheduler=div_beta_scheduler,
                     free_bits=free_bits
                 )
-            ],
+            },
             name=name,
             **kwargs
         )

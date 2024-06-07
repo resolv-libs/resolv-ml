@@ -23,6 +23,9 @@ class PowerTransform(ABC, keras.Layer):
     def inverse_transform(self, inputs):
         pass
 
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
     def build(self, input_shape: Tuple[int, ...]):
         self.lmbda = self.add_weight(
             initializer=keras.initializers.Constant(self._lambda_init),
