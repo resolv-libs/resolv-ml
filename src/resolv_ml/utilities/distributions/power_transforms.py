@@ -11,10 +11,12 @@ class PowerTransform(ABC, keras.Layer):
 
     def __init__(self,
                  lambda_init: float = 1.0,
+                 trainable: bool = True,
                  batch_norm: keras.layers.BatchNormalization = None,
                  name: str = "power_transform", **kwargs):
         super(PowerTransform, self).__init__(name=name, **kwargs)
         self._lambda_init = lambda_init
+        self._trainable = trainable
         self._batch_normalization = batch_norm
 
     def transform(self, inputs):
@@ -29,7 +31,7 @@ class PowerTransform(ABC, keras.Layer):
     def build(self, input_shape: Tuple[int, ...]):
         self.lmbda = self.add_weight(
             initializer=keras.initializers.Constant(self._lambda_init),
-            trainable=True,
+            trainable=self._trainable,
             name="lambda"
         )
 
@@ -40,6 +42,7 @@ class PowerTransform(ABC, keras.Layer):
     def get_config(self):
         base_config = super().get_config()
         config = {
+            "trainable": self._trainable,
             "batch_norm": keras.saving.serialize_keras_object(self._batch_normalization)
         }
         return {**base_config, **config}
