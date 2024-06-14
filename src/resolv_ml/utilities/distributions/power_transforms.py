@@ -53,11 +53,16 @@ class BoxCox(PowerTransform):
 
     def __init__(self,
                  lambda_init: float = 1.0,
+                 trainable: bool = True,
                  batch_norm: keras.layers.BatchNormalization = None,
                  name: str = "box_cox", **kwargs):
         # Set lambda to epsilon if initial value is zero to avoid null gradients
         lambda_init = keras.config.epsilon() if math.isclose(lambda_init, 0.0) else lambda_init
-        super(BoxCox, self).__init__(lambda_init=lambda_init, batch_norm=batch_norm, name=name, **kwargs)
+        super(BoxCox, self).__init__(lambda_init=lambda_init,
+                                     trainable=trainable,
+                                     batch_norm=batch_norm,
+                                     name=name,
+                                     **kwargs)
 
     def transform(self, inputs):
         # WARNING: input values must be > 0.
@@ -85,9 +90,14 @@ class YeoJohnson(PowerTransform):
 
     def __init__(self,
                  lambda_init: float = 1.0,
+                 trainable: bool = True,
                  batch_norm: keras.layers.BatchNormalization = None,
                  name: str = "yeo_johnson", **kwargs):
-        super(YeoJohnson, self).__init__(lambda_init=lambda_init, batch_norm=batch_norm, name=name, **kwargs)
+        super(YeoJohnson, self).__init__(lambda_init=lambda_init,
+                                         trainable=trainable,
+                                         batch_norm=batch_norm,
+                                         name=name,
+                                         **kwargs)
 
     def transform(self, inputs):
         x_pos, x_neg = self._get_positive_and_negative_inputs(inputs)
