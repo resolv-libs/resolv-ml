@@ -205,7 +205,7 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
         self._test_model(vae_model, "ar_seq2seq_vae_trained.keras")
 
     def test_hier_seq2seq_vae_save_and_loading(self):
-        vae_model = self.get_autoregressive_model()
+        vae_model = self.get_hierarchical_model()
         vae_model.save(self.config["output_dir"] / "hier_seq2seq_vae.keras")
         loaded_model = keras.saving.load_model(self.config["output_dir"] / "hier_seq2seq_vae.keras")
         # Use DeepDiff to ignore tuple to list type change in config comparison

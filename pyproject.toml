@@ -35,8 +35,8 @@ include = ["CHANGELOG.md"]
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.12"
-keras = { git = "https://git@github.com/keras-team/keras.git", rev = "master"}
-tensorflow-probability = { version = "^0.24.0", extras = ["tf"]}
+keras = "^3.4.0"
+tensorflow-probability = { version = "^0.24.0", extras = ["tf"] }
 
 [tool.poetry.group.dev.dependencies]
 
