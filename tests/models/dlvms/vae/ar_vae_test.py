@@ -11,14 +11,13 @@ from deepdiff import DeepDiff
 from resolv_pipelines.data.loaders import TFRecordLoader
 from resolv_pipelines.data.representation.mir import PitchSequenceRepresentation
 
-from resolv_ml.models.dlvm.normalizing_flows.power_transform import power_transform_bijector
 from resolv_ml.models.dlvm.vae.ar_vae import AttributeRegularizedVAE
+from resolv_ml.utilities.bijectors import BatchNormalization, BoxCox
 from resolv_ml.utilities.distributions.inference import NormalizingFlowGaussianInference
 from resolv_ml.utilities.regularizers.attribute import (DefaultAttributeRegularizer, SignAttributeRegularizer,
                                                         NormalizingFlowAttributeRegularizer, AttributeRegularizer)
 from resolv_ml.models.seq2seq.rnn import encoders, decoders
 from resolv_ml.utilities.schedulers import get_scheduler
-from tensorflow_probability import bijectors as tfb
 
 
 class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
@@ -247,10 +246,7 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
         vae_model = self.get_hierarchical_model(
             inference_layer=NormalizingFlowGaussianInference(
                 z_size=self.config["z_size"],
-                normalizing_flow=tfb.RealNVP(
-                    num_masked=0,
-                    shift_and_log_scale_fn=tfb.real_nvp_default_template(hidden_layers=[512, 512])
-                ),
+                bijectors=[BoxCox(), BatchNormalization()],
                 target_dimension=0,
             ),
             attribute_regularizers={

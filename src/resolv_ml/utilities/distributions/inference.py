@@ -1,10 +1,12 @@
 # TODO - DOC
 # TODO - add multi-backend support for probability distributions
-from typing import Any
+from typing import Any, List
 
 import keras
 from tensorflow_probability import bijectors as tfb
 from tensorflow_probability import distributions as tfd
+
+from resolv_ml.utilities.bijectors.base import Bijector
 
 
 class Inference(keras.Layer):
@@ -95,7 +97,7 @@ class NormalizingFlowGaussianInference(GaussianInference):
 
     def __init__(self,
                  z_size: int,
-                 normalizing_flow: tfb.Bijector,
+                 bijectors: List[Bijector],
                  target_dimension: int = 0,
                  mean_layer: keras.Layer = None,
                  sigma_layer: keras.Layer = None,
@@ -110,19 +112,19 @@ class NormalizingFlowGaussianInference(GaussianInference):
             name=name,
             **kwargs
         )
-        self._normalizing_flow = normalizing_flow
+        self._bijectors = bijectors
         self._target_dimension = target_dimension
 
     def posterior_distribution(self, inputs, training: bool = False) -> tfd.Distribution:
         vae_inputs, aux_inputs = inputs
         z_mean = self._mean_layer(vae_inputs)
         z_sigma = self._sigma_layer(vae_inputs)
-        return self._get_sequential_joint_distribution(z_mean, z_sigma)
+        return self._get_blockwise_distribution(z_mean, z_sigma)
 
     def prior_distribution(self, training: bool = False) -> tfd.Distribution:
-        return self._get_sequential_joint_distribution()
+        return self._get_blockwise_distribution()
 
-    def _get_sequential_joint_distribution(self, z_mean=None, z_sigma=None):
+    def _get_blockwise_distribution(self, z_mean=None, z_sigma=None):
         prior_z_mean = keras.ops.zeros(self._z_size)
         prior_z_sigma = keras.ops.ones(self._z_size)
         is_post = z_mean is not None and z_sigma is not None
@@ -138,7 +140,7 @@ class NormalizingFlowGaussianInference(GaussianInference):
                     axis=-1
                 )
             ),
-            bijector=self._normalizing_flow
+            bijector=tfb.Chain(self._bijectors)
         )
         # Split the original distribution into three parts: before target dim, at target dim, and after target dim
         before_target_dimension = tfd.MultivariateNormalDiag(
@@ -156,7 +158,21 @@ class NormalizingFlowGaussianInference(GaussianInference):
         components.append(normalizing_flow)
         if after_target_dimension is not None:
             components.append(after_target_dimension)
-        return tfd.JointDistributionSequential(components)
+        return tfd.Blockwise(components)
+
+    def get_config(self):
+        base_config = super().get_config()
+        config = {
+            "bijectors": keras.saving.serialize_keras_object(self._bijectors)
+        }
+        return {**base_config, **config}
+
+    @classmethod
+    def from_config(cls, config):
+        mean_layer = keras.saving.deserialize_keras_object(config.pop("mean_layer"))
+        sigma_layer = keras.saving.deserialize_keras_object(config.pop("sigma_layer"))
+        bijectors = keras.saving.deserialize_keras_object(config.pop("bijectors"))
+        return cls(mean_layer=mean_layer, sigma_layer=sigma_layer, bijectors=bijectors, **config)
 
 
 @keras.saving.register_keras_serializable(package="Inference", name="SamplingLayer")
@@ -181,49 +197,7 @@ class SamplingLayer(keras.Layer):
              **kwargs):
         if training or evaluate:
             z = posterior.sample()
-            if isinstance(posterior, tfd.JointDistribution):
-                z = keras.ops.concatenate(z, axis=-1)
         else:
             num_sequences = inputs
             z = prior.sample(sample_shape=(num_sequences,))
         return z
-
-
-if __name__ == "__main__":
-    from tensorflow_probability import bijectors as tfb
-    from tensorflow_probability import distributions as tfd
-    from resolv_ml.models.dlvm.normalizing_flows.power_transform import power_transform_bijector
-
-    mean = tf.random.normal(shape=(32, 256))
-    sigma = tf.random.normal(shape=(32, 256))
-    nf = tfb.RealNVP(
-        fraction_masked=0.5,
-        shift_and_log_scale_fn=tfb.real_nvp_default_template(hidden_layers=[512, 512])
-    )
-    # nf = power_transform_bijector()
-    post_transformed_distribution = tfd.TransformedDistribution(
-        distribution=tfd.MultivariateNormalDiag(
-            loc=tf.expand_dims(mean[:, 0], axis=-1),
-            scale_diag=tf.expand_dims(sigma[:, 0], axis=-1)
-        ),
-        bijector=nf
-    )
-    post_multivariate_normal = tfd.MultivariateNormalDiag(
-        loc=mean[:, 1:],
-        scale_diag=sigma[:, 1:]
-    )
-    joint_post = tfd.JointDistributionSequential([post_transformed_distribution, post_multivariate_normal])
-
-    prior_transformed_distribution = tfd.TransformedDistribution(
-        distribution=tfd.MultivariateNormalDiag(loc=[0]),
-        bijector=nf
-    )
-    prior_multivariate_normal = tfd.MultivariateNormalDiag(
-        loc=tf.zeros(shape=(255,)),
-        scale_diag=tf.ones(shape=(255,))
-    )
-    joint_prior = tfd.JointDistributionSequential([prior_transformed_distribution, prior_multivariate_normal])
-    samples = joint_post.sample()
-    log_prob = joint_post.log_prob(samples)
-    kld = tfd.kl_divergence(joint_prior, joint_post)
-    pass

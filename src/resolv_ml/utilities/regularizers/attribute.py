@@ -164,6 +164,7 @@ class NormalizingFlowAttributeRegularizer(AttributeRegularizer):
                                      evaluate: bool = False,
                                      **kwargs):
         _, attributes, z, _ = inputs
-        log_prob = posterior.model[0].log_prob(attributes)
+        # TODO - get index for regularization dimension's distribution
+        log_prob = posterior.distributions[0].log_prob(attributes)
         nf_loss = -k_ops.mean(log_prob)
         return nf_loss
