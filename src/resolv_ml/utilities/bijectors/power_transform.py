@@ -14,16 +14,13 @@ class BoxCox(Bijector):
             shift_trainable: bool = True,
             validate_args: bool = False,
             name: str = 'power_transform'):
-        parameters = dict(locals())
-        if power is None or power < 0:
-            raise ValueError('`power` must be a non-negative constant.')
-        self._power = keras.Variable(initializer=power, trainable=power_trainable, name="power")
-        self._shift = keras.Variable(initializer=shift, trainable=shift_trainable, name="shift")
         super(BoxCox, self).__init__(
             forward_min_event_ndims=0,
             validate_args=validate_args,
-            parameters=parameters,
+            parameters=dict(locals()),
             name=name)
+        self._power = keras.Variable(initializer=power, trainable=power_trainable, name="power")
+        self._shift = keras.Variable(initializer=shift, trainable=shift_trainable, name="shift")
 
     @property
     def power(self):
