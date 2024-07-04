@@ -201,7 +201,7 @@ class NormalizingFlowAttributeRegularizer(AttributeRegularizer):
         self._nll_loss_tracker.update_state(negative_log_likelihood)
         self._nll_weight_tracker.update_state(nll_weight)
         self._nll_weighted_loss_tracker.update_state(weighted_nll_loss)
-        self.add_loss(negative_log_likelihood)
+        self.add_loss(weighted_nll_loss)
         transformed_attributes = self._bijectors_chain.inverse(attributes)
         return self._loss_fn(z, transformed_attributes)
 
