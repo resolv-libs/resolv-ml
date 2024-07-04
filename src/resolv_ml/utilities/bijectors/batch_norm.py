@@ -56,14 +56,14 @@ class BatchNormalization(Bijector):
     def _forward(self, x):
         return self._de_normalize(x)
 
-    def _inverse(self, y, **kwargs):
+    def _inverse(self, y):
         return self._normalize(y)
 
     def _forward_log_det_jacobian(self, x):
         # Uses saved statistics to compute volume distortion.
         return -self._inverse_log_det_jacobian(x, use_saved_statistics=True)
 
-    def _inverse_log_det_jacobian(self, y, use_saved_statistics=False, **kwargs):
+    def _inverse_log_det_jacobian(self, y, use_saved_statistics=False):
         if not self.batchnorm.built:
             self.batchnorm.build(y.shape)
 

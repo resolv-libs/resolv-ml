@@ -13,7 +13,6 @@ from resolv_pipelines.data.representation.mir import PitchSequenceRepresentation
 
 from resolv_ml.models.dlvm.vae.ar_vae import AttributeRegularizedVAE
 from resolv_ml.utilities.bijectors import BatchNormalization, BoxCox
-from resolv_ml.utilities.distributions.inference import NormalizingFlowGaussianInference
 from resolv_ml.utilities.regularizers.attribute import (DefaultAttributeRegularizer, SignAttributeRegularizer,
                                                         NormalizingFlowAttributeRegularizer, AttributeRegularizer)
 from resolv_ml.models.seq2seq.rnn import encoders, decoders
@@ -244,11 +243,6 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
 
     def test_power_transform_regularization_model(self):
         vae_model = self.get_hierarchical_model(
-            inference_layer=NormalizingFlowGaussianInference(
-                z_size=self.config["z_size"],
-                bijectors=[BoxCox(), BatchNormalization()],
-                target_dimension=0,
-            ),
             attribute_regularizers={
                 "mae_ar": DefaultAttributeRegularizer(
                     weight_scheduler=get_scheduler(
@@ -257,6 +251,7 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
                     )
                 ),
                 "nf_ar": NormalizingFlowAttributeRegularizer(
+                    bijectors=[BoxCox(), BatchNormalization()],
                     weight_scheduler=get_scheduler(
                         schedule_type=self.config["attr_weight_scheduler"]["type"],
                         schedule_config=self.config["attr_weight_scheduler"]["config"]
