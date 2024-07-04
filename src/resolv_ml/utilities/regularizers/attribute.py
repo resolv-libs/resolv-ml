@@ -31,6 +31,7 @@ class AttributeRegularizer(Regularizer):
                                                attributes,
                                                prior: tfd.Distribution,
                                                posterior: tfd.Distribution,
+                                               current_step=None,
                                                training: bool = False,
                                                evaluate: bool = False):
         raise NotImplementedError("_compute_attribute_regularization_loss must be implemented by subclasses.")
@@ -42,13 +43,14 @@ class AttributeRegularizer(Regularizer):
                                      inputs,
                                      prior: tfd.Distribution,
                                      posterior: tfd.Distribution,
+                                     current_step=None,
                                      training: bool = False,
                                      evaluate: bool = False,
                                      **kwargs):
         _, attributes, z, _ = inputs
         latent_codes = k_ops.expand_dims(z[:, self._regularization_dimension], axis=-1)
         reg_loss = self._compute_attribute_regularization_loss(latent_codes, attributes, prior, posterior,
-                                                               training, evaluate)
+                                                               current_step, training, evaluate)
         return reg_loss
 
     def get_config(self):
@@ -81,6 +83,7 @@ class DefaultAttributeRegularizer(AttributeRegularizer):
                                                attributes,
                                                prior: tfd.Distribution,
                                                posterior: tfd.Distribution,
+                                               current_step=None,
                                                training: bool = False,
                                                evaluate: bool = False):
         return self._loss_fn(latent_codes, attributes)
@@ -122,6 +125,7 @@ class SignAttributeRegularizer(AttributeRegularizer):
                                                attributes,
                                                prior: tfd.Distribution,
                                                posterior: tfd.Distribution,
+                                               current_step=None,
                                                training: bool = False,
                                                evaluate: bool = False):
         lc_dist_mat = compute_pairwise_distance_matrix(latent_codes)
@@ -154,11 +158,12 @@ class NormalizingFlowAttributeRegularizer(AttributeRegularizer):
                  bijectors: List[Bijector],
                  loss_fn: keras.losses.Loss = keras.losses.MeanAbsoluteError(),
                  regularization_dimension: int = 0,
-                 weight_scheduler: Scheduler = None,
+                 reg_weight_scheduler: Scheduler = None,
+                 nll_weight_scheduler: Scheduler = None,
                  name: str = "nf_attr_reg",
                  **kwargs):
         super(NormalizingFlowAttributeRegularizer, self).__init__(
-            weight_scheduler=weight_scheduler,
+            weight_scheduler=reg_weight_scheduler,
             regularization_dimension=regularization_dimension,
             name=name,
             **kwargs
@@ -166,12 +171,16 @@ class NormalizingFlowAttributeRegularizer(AttributeRegularizer):
         self._bijectors = bijectors
         self._bijectors_chain = tfb.Chain(bijectors)
         self._loss_fn = loss_fn
+        self._nll_weight_scheduler = nll_weight_scheduler
         self._nll_loss_tracker = keras.metrics.Mean(name="nf_nll_loss")
+        self._nll_weight_tracker = keras.metrics.Mean(name=f"nf_nll_weight")
+        self._nll_weighted_loss_tracker = keras.metrics.Mean(name=f"nf_nll_loss_weighted")
 
     def _compute_regularization_loss(self,
                                      inputs,
                                      prior: tfd.Distribution,
                                      posterior: tfd.Distribution,
+                                     current_step=None,
                                      training: bool = False,
                                      evaluate: bool = False,
                                      **kwargs):
@@ -186,9 +195,13 @@ class NormalizingFlowAttributeRegularizer(AttributeRegularizer):
         )
         log_likelihood = normalizing_flow.log_prob(attributes)
         negative_log_likelihood = -k_ops.mean(log_likelihood)
-        self.add_loss(negative_log_likelihood)
+        nll_weight = self._nll_weight_scheduler(step=current_step) if training \
+            else self._nll_weight_scheduler.final_value()
+        weighted_nll_loss = negative_log_likelihood * nll_weight
         self._nll_loss_tracker.update_state(negative_log_likelihood)
-
+        self._nll_weight_tracker.update_state(nll_weight)
+        self._nll_weighted_loss_tracker.update_state(weighted_nll_loss)
+        self.add_loss(negative_log_likelihood)
         transformed_attributes = self._bijectors_chain.inverse(attributes)
         return self._loss_fn(z, transformed_attributes)
 

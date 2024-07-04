@@ -30,7 +30,7 @@ class Regularizer(keras.Layer):
             weight = 1.0
             if self._weight_scheduler:
                 weight = self._weight_scheduler(step=current_step) if training else self._weight_scheduler.final_value()
-            reg_loss = self._compute_regularization_loss(inputs, prior, posterior, training, evaluate)
+            reg_loss = self._compute_regularization_loss(inputs, prior, posterior, current_step, training, evaluate)
             weighted_reg_loss = reg_loss * weight
             self._loss_tracker.update_state(reg_loss)
             self._weight_tracker.update_state(weight)
@@ -46,6 +46,7 @@ class Regularizer(keras.Layer):
                                      inputs,
                                      prior: tfd.Distribution,
                                      posterior: tfd.Distribution,
+                                     current_step=None,
                                      training: bool = False,
                                      evaluate: bool = False,
                                      **kwargs):

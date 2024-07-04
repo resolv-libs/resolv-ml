@@ -29,6 +29,7 @@ class DivergenceRegularizer(Regularizer):
                                      inputs,
                                      prior: tfd.Distribution,
                                      posterior: tfd.Distribution,
+                                     current_step=None,
                                      training: bool = False,
                                      evaluate: bool = False,
                                      **kwargs):

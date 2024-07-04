@@ -246,7 +246,11 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
             attribute_regularizers={
                 "nf_ar": NormalizingFlowAttributeRegularizer(
                     bijectors=[BoxCox(), BatchNormalization()],
-                    weight_scheduler=get_scheduler(
+                    reg_weight_scheduler=get_scheduler(
+                        schedule_type=self.config["attr_weight_scheduler"]["type"],
+                        schedule_config=self.config["attr_weight_scheduler"]["config"]
+                    ),
+                    nll_weight_scheduler=get_scheduler(
                         schedule_type=self.config["attr_weight_scheduler"]["type"],
                         schedule_config=self.config["attr_weight_scheduler"]["config"]
                     )
