@@ -14,10 +14,7 @@ class BatchNormalization(Bijector):
                  validate_args: bool = False,
                  name: str = 'batch_normalization'):
         parameters = dict(locals())
-        self.batchnorm = batchnorm_layer or keras.layers.BatchNormalization(
-            center=center,
-            scale=scale
-        )
+        self.batchnorm = batchnorm_layer or keras.layers.BatchNormalization(center=center, scale=scale)
         if not isinstance(self.batchnorm, keras.layers.BatchNormalization):
             raise ValueError(f'batchnorm_layer must be an instance of `keras.layers.BatchNormalization`. '
                              f'Got {type(self.batchnorm)}')
@@ -28,6 +25,10 @@ class BatchNormalization(Bijector):
             validate_args=validate_args,
             parameters=parameters,
             name=name)
+
+    def build(self, input_shape):
+        if not self.batchnorm.built:
+            self.batchnorm.build(input_shape)
 
     @classmethod
     def _parameter_properties(cls, dtype):
@@ -45,8 +46,6 @@ class BatchNormalization(Bijector):
             return batch_denormalized
 
         # Uses the saved statistics.
-        if not self.batchnorm.built:
-            self.batchnorm.build(x.shape)
         mean = self.batchnorm.moving_mean
         variance = self.batchnorm.moving_variance
         beta = self.batchnorm.beta if self.batchnorm.center else None

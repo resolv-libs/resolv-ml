@@ -8,8 +8,8 @@ class BoxCox(Bijector):
 
     def __init__(
             self,
-            power: float = 0.0,
-            shift: float = 0.0,
+            power_init_value: float = 0.0,
+            shift_init_value: float = 0.0,
             power_trainable: bool = True,
             shift_trainable: bool = True,
             validate_args: bool = False,
@@ -19,8 +19,23 @@ class BoxCox(Bijector):
             validate_args=validate_args,
             parameters=dict(locals()),
             name=name)
-        self._power = keras.Variable(initializer=power, trainable=power_trainable, name="power")
-        self._shift = keras.Variable(initializer=shift, trainable=shift_trainable, name="shift")
+        self._power_init_value = power_init_value
+        self._shift_init_value = shift_init_value
+        self._power_trainable = power_trainable
+        self._shift_trainable = shift_trainable
+
+    def build(self, input_shape):
+        super().build(input_shape)
+        self._power = self.add_weight(
+            initializer=keras.initializers.Constant(self._power_init_value),
+            trainable=self._power_trainable,
+            name='power'
+        )
+        self._shift = self.add_weight(
+            initializer=keras.initializers.Constant(self._shift_init_value),
+            trainable=self._shift_trainable,
+            name='shift'
+        )
 
     @property
     def power(self):
@@ -72,17 +87,3 @@ class BoxCox(Bijector):
     def _maybe_assert_valid_y(self, y):
         if self.validate_args:
             assert y + self.shift > 0, f'Inverse transformation input must be greater than or equal to {self.shift}.'
-
-    def get_config(self):
-        base_config = super().get_config()
-        config = {
-            "power": keras.saving.serialize_keras_object(self.power),
-            "shift": keras.saving.serialize_keras_object(self.shift)
-        }
-        return {**base_config, **config}
-
-    @classmethod
-    def from_config(cls, config, custom_objects=None):
-        power = keras.saving.deserialize_keras_object(config.pop("power"))
-        shift = keras.saving.deserialize_keras_object(config.pop("shift"))
-        return cls(power, shift, **config)

@@ -176,6 +176,13 @@ class NormalizingFlowAttributeRegularizer(AttributeRegularizer):
         self._nll_weight_tracker = keras.metrics.Mean(name=f"nf_nll_weight")
         self._nll_weighted_loss_tracker = keras.metrics.Mean(name=f"nf_nll_loss_weighted")
 
+    def build(self, input_shape):
+        super().build(input_shape)
+        attribute_input_shape = input_shape[1]
+        for bijector in self._bijectors:
+            if not bijector.built:
+                bijector.build(attribute_input_shape)
+
     def _compute_regularization_loss(self,
                                      inputs,
                                      prior: tfd.Distribution,
@@ -190,7 +197,8 @@ class NormalizingFlowAttributeRegularizer(AttributeRegularizer):
         normalizing_flow = tfd.TransformedDistribution(
             distribution=tfd.MultivariateNormalDiag(
                 loc=posterior.loc[:, self._regularization_dimension],
-                scale_diag=posterior.scale.diag[:, self._regularization_dimension]),
+                scale_diag=posterior.scale.diag[:, self._regularization_dimension]
+            ),
             bijector=self._bijectors_chain
         )
         log_likelihood = normalizing_flow.log_prob(attributes)

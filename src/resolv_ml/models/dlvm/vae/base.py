@@ -31,7 +31,7 @@ class VAE(keras.Model):
         super().build(input_shape)
         vae_input_shape, aux_input_shape = input_shape
         if len(aux_input_shape) == 1:
-            aux_input_shape = aux_input_shape + (1,)
+            aux_input_shape = tuple(aux_input_shape) + (1,)
         if not self._input_processing_layer.built:
             self._input_processing_layer.build(vae_input_shape)
         if self._aux_input_processing_layer and not self._aux_input_processing_layer.built:
