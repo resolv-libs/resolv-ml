@@ -244,12 +244,6 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
     def test_power_transform_regularization_model(self):
         vae_model = self.get_hierarchical_model(
             attribute_regularizers={
-                "mae_ar": DefaultAttributeRegularizer(
-                    weight_scheduler=get_scheduler(
-                        schedule_type=self.config["attr_weight_scheduler"]["type"],
-                        schedule_config=self.config["attr_weight_scheduler"]["config"]
-                    )
-                ),
                 "nf_ar": NormalizingFlowAttributeRegularizer(
                     bijectors=[BoxCox(), BatchNormalization()],
                     weight_scheduler=get_scheduler(

@@ -152,6 +152,7 @@ class NormalizingFlowAttributeRegularizer(AttributeRegularizer):
 
     def __init__(self,
                  bijectors: List[Bijector],
+                 loss_fn: keras.losses.Loss = keras.losses.MeanAbsoluteError(),
                  regularization_dimension: int = 0,
                  weight_scheduler: Scheduler = None,
                  name: str = "nf_attr_reg",
@@ -164,6 +165,8 @@ class NormalizingFlowAttributeRegularizer(AttributeRegularizer):
         )
         self._bijectors = bijectors
         self._bijectors_chain = tfb.Chain(bijectors)
+        self._loss_fn = loss_fn
+        self._nll_loss_tracker = keras.metrics.Mean(name="nf_nll_loss")
 
     def _compute_regularization_loss(self,
                                      inputs,
@@ -181,18 +184,24 @@ class NormalizingFlowAttributeRegularizer(AttributeRegularizer):
                 scale_diag=posterior.scale.diag[:, self._regularization_dimension]),
             bijector=self._bijectors_chain
         )
-        log_prob = normalizing_flow.log_prob(attributes)
-        nf_loss = -k_ops.mean(log_prob)
-        return nf_loss
+        log_likelihood = normalizing_flow.log_prob(attributes)
+        negative_log_likelihood = -k_ops.mean(log_likelihood)
+        self.add_loss(negative_log_likelihood)
+        self._nll_loss_tracker.update_state(negative_log_likelihood)
+
+        transformed_attributes = self._bijectors_chain.inverse(attributes)
+        return self._loss_fn(z, transformed_attributes)
 
     def get_config(self):
         base_config = super().get_config()
         config = {
-            "bijectors": keras.saving.serialize_keras_object(self._bijectors)
+            "bijectors": keras.saving.serialize_keras_object(self._bijectors),
+            "loss_fn": keras.saving.serialize_keras_object(self._loss_fn)
         }
         return {**base_config, **config}
 
     @classmethod
     def from_config(cls, config):
         bijectors = keras.saving.deserialize_keras_object(config.pop("bijectors"))
-        return cls(bijectors=bijectors, **config)
+        loss_fn = keras.saving.deserialize_keras_object(config.pop("loss_fn"))
+        return cls(loss_fn=loss_fn, bijectors=bijectors, **config)
