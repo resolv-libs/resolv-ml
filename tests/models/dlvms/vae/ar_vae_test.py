@@ -64,10 +64,13 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
                     "decay": False
                 }
             },
-            "jac_weight_scheduler": {
-                "type": "constant",
+            "nll_weight_scheduler": {
+                "type": "exponential",
                 "config": {
-                    "value": 1.0
+                    "rate": 0.999,
+                    "min_value": 0.0,
+                    "max_value": 0.2,
+                    "decay": False
                 }
             },
         }
@@ -256,9 +259,9 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
                         schedule_type=self.config["attr_weight_scheduler"]["type"],
                         schedule_config=self.config["attr_weight_scheduler"]["config"]
                     ),
-                    jac_weight_scheduler=get_scheduler(
-                        schedule_type=self.config["jac_weight_scheduler"]["type"],
-                        schedule_config=self.config["jac_weight_scheduler"]["config"]
+                    nll_weight_scheduler=get_scheduler(
+                        schedule_type=self.config["nll_weight_scheduler"]["type"],
+                        schedule_config=self.config["nll_weight_scheduler"]["config"]
                     )
                 )
             }
