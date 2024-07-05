@@ -11,6 +11,7 @@ from deepdiff import DeepDiff
 from resolv_pipelines.data.loaders import TFRecordLoader
 from resolv_pipelines.data.representation.mir import PitchSequenceRepresentation
 
+from resolv_ml.models.dlvm.normalizing_flows.base import NormalizingFlow
 from resolv_ml.models.dlvm.vae.ar_vae import AttributeRegularizedVAE
 from resolv_ml.utilities.bijectors import BatchNormalization, BoxCox
 from resolv_ml.utilities.regularizers.attribute import (DefaultAttributeRegularizer, SignAttributeRegularizer,
@@ -254,14 +255,17 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
         vae_model = self.get_hierarchical_model(
             attribute_regularizers={
                 "nf_ar": NormalizingFlowAttributeRegularizer(
-                    bijectors=[BoxCox(), BatchNormalization()],
+                    normalizing_flow=NormalizingFlow(
+                        bijectors=[BoxCox(), BatchNormalization()],
+                        add_loss=True,
+                        nll_weight_scheduler=get_scheduler(
+                            schedule_type=self.config["nll_weight_scheduler"]["type"],
+                            schedule_config=self.config["nll_weight_scheduler"]["config"]
+                        )
+                    ),
                     reg_weight_scheduler=get_scheduler(
                         schedule_type=self.config["attr_weight_scheduler"]["type"],
                         schedule_config=self.config["attr_weight_scheduler"]["config"]
-                    ),
-                    nll_weight_scheduler=get_scheduler(
-                        schedule_type=self.config["nll_weight_scheduler"]["type"],
-                        schedule_config=self.config["nll_weight_scheduler"]["config"]
                     )
                 )
             }
