@@ -159,7 +159,7 @@ class NormalizingFlowAttributeRegularizer(AttributeRegularizer):
                  loss_fn: keras.losses.Loss = keras.losses.MeanAbsoluteError(),
                  regularization_dimension: int = 0,
                  reg_weight_scheduler: Scheduler = None,
-                 nll_weight_scheduler: Scheduler = None,
+                 jac_weight_scheduler: Scheduler = None,
                  name: str = "nf_attr_reg",
                  **kwargs):
         super(NormalizingFlowAttributeRegularizer, self).__init__(
@@ -171,10 +171,10 @@ class NormalizingFlowAttributeRegularizer(AttributeRegularizer):
         self._bijectors = bijectors
         self._bijectors_chain = tfb.Chain(bijectors)
         self._loss_fn = loss_fn
-        self._nll_weight_scheduler = nll_weight_scheduler
-        self._nll_loss_tracker = keras.metrics.Mean(name="nf_nll_loss")
-        self._nll_weight_tracker = keras.metrics.Mean(name=f"nf_nll_weight")
-        self._nll_weighted_loss_tracker = keras.metrics.Mean(name=f"nf_nll_loss_weighted")
+        self._jac_weight_scheduler = jac_weight_scheduler
+        self._jac_loss_tracker = keras.metrics.Mean(name="nf_jac_loss")
+        self._jac_weight_tracker = keras.metrics.Mean(name=f"nf_jac_weight")
+        self._jac_weighted_loss_tracker = keras.metrics.Mean(name=f"nf_jac_loss_weighted")
 
     def build(self, input_shape):
         super().build(input_shape)
@@ -192,25 +192,16 @@ class NormalizingFlowAttributeRegularizer(AttributeRegularizer):
                                      evaluate: bool = False,
                                      **kwargs):
         _, attributes, z, _ = inputs
-        # Build the flow that has the chosen regularization dimension component of the posterior distribution as base
-        # distribution. For now, we assume that the posterior is a MultivariateGaussian.
-        normalizing_flow = tfd.TransformedDistribution(
-            distribution=tfd.MultivariateNormalDiag(
-                loc=posterior.loc[:, self._regularization_dimension],
-                scale_diag=posterior.scale.diag[:, self._regularization_dimension]
-            ),
-            bijector=self._bijectors_chain
-        )
-        log_likelihood = normalizing_flow.log_prob(attributes)
-        negative_log_likelihood = -k_ops.mean(log_likelihood)
-        nll_weight = self._nll_weight_scheduler(step=current_step) if training \
-            else self._nll_weight_scheduler.final_value()
-        weighted_nll_loss = negative_log_likelihood * nll_weight
-        self._nll_loss_tracker.update_state(negative_log_likelihood)
-        self._nll_weight_tracker.update_state(nll_weight)
-        self._nll_weighted_loss_tracker.update_state(weighted_nll_loss)
-        self.add_loss(weighted_nll_loss)
         transformed_attributes = self._bijectors_chain.inverse(attributes)
+        forward_jacobian_det = self._bijectors_chain.forward_log_det_jacobian(attributes)
+        jac_loss = k_ops.mean(forward_jacobian_det)
+        jac_weight = self._jac_weight_scheduler(step=current_step) if training \
+            else self._jac_weight_scheduler.final_value()
+        weighted_jac_loss = jac_loss * jac_weight
+        self._jac_loss_tracker.update_state(jac_loss)
+        self._jac_weight_tracker.update_state(jac_weight)
+        self._jac_weighted_loss_tracker.update_state(weighted_jac_loss)
+        self.add_loss(-weighted_jac_loss)
         return self._loss_fn(z, transformed_attributes)
 
     def get_config(self):

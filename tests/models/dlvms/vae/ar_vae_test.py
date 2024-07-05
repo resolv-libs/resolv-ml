@@ -64,6 +64,12 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
                     "decay": False
                 }
             },
+            "jac_weight_scheduler": {
+                "type": "constant",
+                "config": {
+                    "value": 1.0
+                }
+            },
         }
 
     def setUp(self):
@@ -250,9 +256,9 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
                         schedule_type=self.config["attr_weight_scheduler"]["type"],
                         schedule_config=self.config["attr_weight_scheduler"]["config"]
                     ),
-                    nll_weight_scheduler=get_scheduler(
-                        schedule_type=self.config["attr_weight_scheduler"]["type"],
-                        schedule_config=self.config["attr_weight_scheduler"]["config"]
+                    jac_weight_scheduler=get_scheduler(
+                        schedule_type=self.config["jac_weight_scheduler"]["type"],
+                        schedule_config=self.config["jac_weight_scheduler"]["config"]
                     )
                 )
             }
