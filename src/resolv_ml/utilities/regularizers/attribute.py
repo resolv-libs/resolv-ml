@@ -172,15 +172,14 @@ class NormalizingFlowAttributeRegularizer(AttributeRegularizer):
         attribute_input_shape = input_shape[1]
         self._normalizing_flow.build(attribute_input_shape)
 
-    def _compute_regularization_loss(self,
-                                     inputs,
-                                     prior: tfd.Distribution,
-                                     posterior: tfd.Distribution,
-                                     current_step=None,
-                                     training: bool = False,
-                                     evaluate: bool = False,
-                                     **kwargs):
-        _, attributes, z, _ = inputs
+    def _compute_attribute_regularization_loss(self,
+                                               latent_codes,
+                                               attributes,
+                                               prior: tfd.Distribution,
+                                               posterior: tfd.Distribution,
+                                               current_step=None,
+                                               training: bool = False,
+                                               evaluate: bool = False):
         nf_base_dist = tfd.MultivariateNormalDiag(
             loc=posterior.loc[:, self._regularization_dimension],
             scale_diag=posterior.scale.diag[:, self._regularization_dimension]
@@ -190,7 +189,7 @@ class NormalizingFlowAttributeRegularizer(AttributeRegularizer):
                                                         current_step=current_step,
                                                         inverse=True,
                                                         training=training)
-        return self._loss_fn(z, transformed_attributes)
+        return self._loss_fn(latent_codes, transformed_attributes)
 
     def get_config(self):
         base_config = super().get_config()
