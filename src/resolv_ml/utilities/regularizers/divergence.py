@@ -33,7 +33,7 @@ class DivergenceRegularizer(Regularizer):
                                      training: bool = False,
                                      evaluate: bool = False,
                                      **kwargs):
-        div = self._divergence_fn(prior, posterior)
+        div = self._divergence_fn(posterior, prior)
         # Compute the cost according to free_bits
         free_nats = self._free_bits * keras.ops.log(2.0)
         div_cost = keras.ops.maximum(div - free_nats, 0)
