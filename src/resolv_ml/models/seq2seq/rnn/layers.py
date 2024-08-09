@@ -161,8 +161,8 @@ class StackedBidirectionalRNN(keras.Layer):
         #  (in particular check methods build, compute_output_shape and call)
         return tuple(prev_output) + tuple(layers_states[-1]) if self._return_state else prev_output
 
-    def compute_output_shape(self, inputs_shape, initial_state_shape=None):
-        output_shape = inputs_shape
+    def compute_output_shape(self, input_shape, initial_state_shape=None):
+        output_shape = input_shape
         state_shape = None
         merge_mode = None
 

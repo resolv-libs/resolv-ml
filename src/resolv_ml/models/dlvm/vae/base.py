@@ -3,16 +3,19 @@ from typing import Dict
 
 import keras
 
+from ....utilities.distributions.inference import Inference
+from ....utilities.regularizers.base import Regularizer
+
 
 class VAE(keras.Model):
 
     def __init__(self,
                  input_processing_layer: keras.Layer,
-                 inference_layer: keras.Layer,
+                 inference_layer: Inference,
                  sampling_layer: keras.Layer,
                  generative_layer: keras.Layer,
                  aux_input_processing_layer: keras.Layer = None,
-                 regularization_layers: Dict[str, keras.Layer] = None,
+                 regularizers: Dict[str, Regularizer] = None,
                  name: str = "vae",
                  **kwargs):
         super(VAE, self).__init__(name=name, **kwargs)
@@ -21,17 +24,14 @@ class VAE(keras.Model):
         self._sampling_layer = sampling_layer
         self._generative_layer = generative_layer
         self._aux_input_processing_layer = aux_input_processing_layer
-        self._regularization_layers = regularization_layers
+        self._regularizers = regularizers
         self._evaluation_mode = False
-
-    def _add_regularization_losses(self, regularization_losses):
-        raise NotImplementedError("VAE subclasses must implement _add_regularization_losses.")
 
     def build(self, input_shape):
         super().build(input_shape)
         vae_input_shape, aux_input_shape = input_shape
         if len(aux_input_shape) == 1:
-            aux_input_shape = aux_input_shape + (1,)
+            aux_input_shape = tuple(aux_input_shape) + (1,)
         if not self._input_processing_layer.built:
             self._input_processing_layer.build(vae_input_shape)
         if self._aux_input_processing_layer and not self._aux_input_processing_layer.built:
@@ -47,7 +47,7 @@ class VAE(keras.Model):
         generative_in_shape = vae_input_shape, aux_input_shape, sampling_out_shape
         if not self._generative_layer.built:
             self._generative_layer.build(generative_in_shape)
-        for layer in self._regularization_layers.values():
+        for layer in self._regularizers.values():
             if not layer.built:
                 layer.build(generative_in_shape)
 
@@ -57,30 +57,30 @@ class VAE(keras.Model):
             processed_aux_input = self._aux_input_processing_layer(aux_input, training=training) \
                 if self._aux_input_processing_layer else aux_input
             current_step = self.optimizer.iterations + 1
-            z, posterior_dist = self.encode(inputs=(vae_input, processed_aux_input),
-                                            training=training,
-                                            evaluate=self._evaluation_mode)
+            z, posterior_dist, prior_dist = self.encode(inputs=(vae_input, processed_aux_input),
+                                                        training=training,
+                                                        evaluate=self._evaluation_mode)
             outputs = self.decode(inputs=(vae_input, processed_aux_input, z),
                                   training=training,
                                   evaluate=self._evaluation_mode,
                                   current_step=current_step)
-            regularization_losses = []
-            if self._regularization_layers:
-                for regularization_layer in self._regularization_layers.values():
+            if self._regularizers:
+                for regularizer_id, regularizer in self._regularizers.items():
                     regularizer_inputs = vae_input, processed_aux_input, z, outputs
-                    layer_reg_losses = regularization_layer(regularizer_inputs,
-                                                            posterior=posterior_dist,
-                                                            training=training,
-                                                            evaluate=self._evaluation_mode,
-                                                            current_step=current_step)
-                    regularization_losses.append(layer_reg_losses)
-                self._add_regularization_losses(regularization_losses)
+                    reg_loss = regularizer(regularizer_inputs,
+                                           prior=prior_dist,
+                                           posterior=posterior_dist,
+                                           training=training,
+                                           evaluate=self._evaluation_mode,
+                                           current_step=current_step)
+                    self.add_loss(reg_loss)
             return outputs
         else:
             if len(inputs[0].shape) == 0 and len(inputs[1].shape) == 0:
                 # Inputs are scalars (generation mode)
                 num_sequences, seq_length = inputs
-                z = self._sampling_layer(inputs=num_sequences)
+                z = self._sampling_layer(inputs=num_sequences,
+                                         prior=self._inference_layer.prior_distribution(training=training))
                 outputs = self.decode((z, seq_length))
                 return outputs, z
             else:
@@ -89,22 +89,26 @@ class VAE(keras.Model):
                 processed_aux_input = self._aux_input_processing_layer(aux_input, training=training) \
                     if self._aux_input_processing_layer else aux_input
                 sequence_length = keras.ops.convert_to_tensor(vae_input.shape[1])
-                z, _ = self.encode(inputs=(vae_input, processed_aux_input), evaluate=True)
+                z, _, _ = self.encode(inputs=(vae_input, processed_aux_input), evaluate=True)
                 outputs = self.decode(inputs=(z, sequence_length))
                 return outputs, z, vae_input, aux_input, processed_aux_input
 
     def encode(self, inputs, training: bool = False, evaluate: bool = False):
         vae_input, aux_input = inputs
         input_processing_layer_out = self._input_processing_layer(vae_input, training=training)
-        posterior_dist = self._inference_layer(input_processing_layer_out, training=training)
+        posterior_dist, prior_dist = self._inference_layer((input_processing_layer_out, aux_input), training=training)
         z = self._sampling_layer(aux_input,
+                                 prior=prior_dist,
                                  posterior=posterior_dist,
                                  training=training,
                                  evaluate=evaluate)
-        return z, posterior_dist
+        return z, posterior_dist, prior_dist
 
     def sample(self, num_samples, training: bool = False, evaluate: bool = False):
-        z = self._sampling_layer(num_samples, training=training, evaluate=evaluate)
+        z = self._sampling_layer(num_samples,
+                                 prior=self._inference_layer.prior_distribution(training=training),
+                                 training=training,
+                                 evaluate=evaluate)
         return z
 
     def decode(self, inputs, current_step=None, training: bool = False, evaluate: bool = False):

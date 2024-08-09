@@ -1,13 +1,29 @@
 # TODO - DOC
 # TODO - add multi-backend support for probability distributions
-from typing import Any
 
 import keras
-from tensorflow_probability import distributions as tfp_dist
+from tensorflow_probability import distributions as tfd
+
+
+class Inference(keras.Layer):
+
+    def posterior_distribution(self, inputs, training: bool = False) -> tfd.Distribution:
+        raise NotImplementedError("get_posterior_distribution must be implemented by subclasses.")
+
+    def prior_distribution(self, training: bool = False) -> tfd.Distribution:
+        raise NotImplementedError("get_prior_distribution must be implemented by subclasses.")
+
+    def compute_output_shape(self, input_shape):
+        return (2,)
+
+    def call(self, inputs, training: bool = False, **kwargs):
+        posterior = self.posterior_distribution(inputs, training=training)
+        prior = self.prior_distribution(training=training)
+        return posterior, prior
 
 
 @keras.saving.register_keras_serializable(package="Inference", name="GaussianInference")
-class GaussianInference(keras.Layer):
+class GaussianInference(Inference):
 
     def __init__(self,
                  z_size: int,
@@ -26,13 +42,14 @@ class GaussianInference(keras.Layer):
         if not self._sigma_layer.built:
             self._sigma_layer.build(input_shape)
 
-    def call(self, inputs: Any, training: bool = False, **kwargs):
-        z_mean = self._mean_layer(inputs)
-        z_sigma = self._sigma_layer(inputs)
-        return tfp_dist.MultivariateNormalDiag(loc=z_mean, scale_diag=z_sigma)
+    def posterior_distribution(self, inputs, training: bool = False) -> tfd.Distribution:
+        vae_inputs, _ = inputs
+        z_mean = self._mean_layer(vae_inputs)
+        z_sigma = self._sigma_layer(vae_inputs)
+        return tfd.MultivariateNormalDiag(loc=z_mean, scale_diag=z_sigma)
 
-    def compute_output_shape(self, input_shape):
-        return (1,)
+    def prior_distribution(self, training: bool = False) -> tfd.Distribution:
+        return tfd.MultivariateNormalDiag(loc=keras.ops.zeros(self._z_size), scale_diag=keras.ops.ones(self._z_size))
 
     @classmethod
     def default_mean_layer(cls, z_size: int) -> keras.layers.Dense:
@@ -75,29 +92,25 @@ class GaussianInference(keras.Layer):
 class SamplingLayer(keras.Layer):
 
     def __init__(self,
-                 prior: tfp_dist.Distribution,
                  z_size: int,
                  name: str = "sampling",
                  **kwargs):
         super(SamplingLayer, self).__init__(name=name, **kwargs)
         self._z_size = z_size
-        self._prior = prior
 
     def compute_output_shape(self, input_shape, **kwargs):
         return input_shape[0], self._z_size
 
     def call(self,
              inputs,
-             posterior: tfp_dist.Distribution = None,
+             prior: tfd.Distribution,
+             posterior: tfd.Distribution = None,
              training: bool = False,
              evaluate: bool = False,
              **kwargs):
         if training or evaluate:
-            if not posterior:
-                raise ValueError("A posterior distribution should be provided when using the sampling layer in "
-                                 "training or validation modes.")
             z = posterior.sample()
         else:
             num_sequences = inputs
-            z = self._prior.sample(sample_shape=(num_sequences,))
+            z = prior.sample(sample_shape=(num_sequences,))
         return z

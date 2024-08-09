@@ -3,6 +3,7 @@ import logging
 import os
 import unittest
 from pathlib import Path
+from typing import Dict
 
 import keras
 import tensorflow as tf
@@ -10,10 +11,12 @@ from deepdiff import DeepDiff
 from resolv_pipelines.data.loaders import TFRecordLoader
 from resolv_pipelines.data.representation.mir import PitchSequenceRepresentation
 
+from resolv_ml.models.dlvm.normalizing_flows.base import NormalizingFlow
 from resolv_ml.models.dlvm.vae.ar_vae import AttributeRegularizedVAE
-from resolv_ml.utilities.regularizers.attribute import DefaultAttributeRegularizer, SignAttributeRegularizer
+from resolv_ml.utilities.bijectors import BatchNormalization, BoxCox
+from resolv_ml.utilities.regularizers.attribute import (DefaultAttributeRegularizer, SignAttributeRegularizer,
+                                                        NormalizingFlowAttributeRegularizer, AttributeRegularizer)
 from resolv_ml.models.seq2seq.rnn import encoders, decoders
-from resolv_ml.utilities.distributions.power_transforms import BoxCox, YeoJohnson
 from resolv_ml.utilities.schedulers import get_scheduler
 
 
@@ -53,12 +56,21 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
                 }
             },
             "free_bits": 0.0,
-            "attr_beta_scheduler": {
+            "attr_weight_scheduler": {
                 "type": "exponential",
                 "config": {
                     "rate": 0.999,
                     "min_value": 0.0,
                     "max_value": 0.5,
+                    "decay": False
+                }
+            },
+            "nll_weight_scheduler": {
+                "type": "exponential",
+                "config": {
+                    "rate": 0.999,
+                    "min_value": 0.0,
+                    "max_value": 0.2,
                     "decay": False
                 }
             },
@@ -76,7 +88,10 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
         aux_input_shape = (self.config["batch_size"],)
         return input_seq_shape, aux_input_shape
 
-    def get_hierarchical_model(self, attribute_reg_layer, attribute_proc_layer=None) -> AttributeRegularizedVAE:
+    def get_hierarchical_model(self,
+                               attribute_regularizers: Dict[str, AttributeRegularizer],
+                               attribute_proc_layer: keras.Layer = None,
+                               inference_layer: keras.Layer = None) -> AttributeRegularizedVAE:
         model = AttributeRegularizedVAE(
             z_size=self.config["z_size"],
             input_processing_layer=encoders.BidirectionalRNNEncoder(
@@ -99,8 +114,9 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
                 dec_rnn_sizes=self.config["dec_rnn_sizes"],
                 dropout=self.config["dropout"]
             ),
+            inference_layer=inference_layer,
             attribute_processing_layer=attribute_proc_layer,
-            attribute_regularization_layer=attribute_reg_layer,
+            attribute_regularizers=attribute_regularizers,
             div_beta_scheduler=get_scheduler(
                 schedule_type=self.config["div_beta_scheduler"]["type"],
                 schedule_config=self.config["div_beta_scheduler"]["config"]
@@ -170,12 +186,14 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
     def test_summary_and_plot(self):
         vae_model = self.get_hierarchical_model(
             attribute_proc_layer=keras.layers.BatchNormalization(center=False, scale=False),
-            attribute_reg_layer=DefaultAttributeRegularizer(
-                beta_scheduler=get_scheduler(
-                    schedule_type=self.config["attr_beta_scheduler"]["type"],
-                    schedule_config=self.config["attr_beta_scheduler"]["config"]
+            attribute_regularizers={
+                "mae_ar": DefaultAttributeRegularizer(
+                    weight_scheduler=get_scheduler(
+                        schedule_type=self.config["attr_weight_scheduler"]["type"],
+                        schedule_config=self.config["attr_weight_scheduler"]["config"]
+                    )
                 )
-            )
+            }
         )
         vae_model.print_summary(self.get_input_shape(), expand_nested=True)
         keras.utils.plot_model(
@@ -191,12 +209,14 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
     def test_save_and_loading(self):
         vae_model = self.get_hierarchical_model(
             attribute_proc_layer=keras.layers.BatchNormalization(center=False, scale=False),
-            attribute_reg_layer=DefaultAttributeRegularizer(
-                beta_scheduler=get_scheduler(
-                    schedule_type=self.config["attr_beta_scheduler"]["type"],
-                    schedule_config=self.config["attr_beta_scheduler"]["config"]
+            attribute_regularizers={
+                "mae_ar": DefaultAttributeRegularizer(
+                    weight_scheduler=get_scheduler(
+                        schedule_type=self.config["attr_weight_scheduler"]["type"],
+                        schedule_config=self.config["attr_weight_scheduler"]["config"]
+                    )
                 )
-            )
+            }
         )
         vae_model.save(self.config["output_dir"] / "ar_default_re.keras")
         loaded_model = keras.saving.load_model(self.config["output_dir"] / "ar_default_re.keras")
@@ -207,50 +227,50 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
     def test_default_regularization_model(self):
         vae_model = self.get_hierarchical_model(
             attribute_proc_layer=keras.layers.BatchNormalization(center=False, scale=False),
-            attribute_reg_layer=DefaultAttributeRegularizer(
-                beta_scheduler=get_scheduler(
-                    schedule_type=self.config["attr_beta_scheduler"]["type"],
-                    schedule_config=self.config["attr_beta_scheduler"]["config"]
+            attribute_regularizers={
+                "mae_ar": DefaultAttributeRegularizer(
+                    weight_scheduler=get_scheduler(
+                        schedule_type=self.config["attr_weight_scheduler"]["type"],
+                        schedule_config=self.config["attr_weight_scheduler"]["config"]
+                    )
                 )
-            )
+            }
         )
         self._test_model(vae_model, "ar_default_reg_trained.keras")
 
     def test_sign_regularization_model(self):
         vae_model = self.get_hierarchical_model(
-            attribute_reg_layer=SignAttributeRegularizer(
-                beta_scheduler=get_scheduler(
-                    schedule_type=self.config["attr_beta_scheduler"]["type"],
-                    schedule_config=self.config["attr_beta_scheduler"]["config"]
+            attribute_regularizers={
+                "sign_ar": SignAttributeRegularizer(
+                    weight_scheduler=get_scheduler(
+                        schedule_type=self.config["attr_weight_scheduler"]["type"],
+                        schedule_config=self.config["attr_weight_scheduler"]["config"]
+                    )
                 )
-            )
+            }
         )
         self._test_model(vae_model, "ar_sign_reg_trained.keras")
 
-    def test_power_transform_regularization_box_cox_model(self):
+    def test_power_transform_regularization_model(self):
         vae_model = self.get_hierarchical_model(
-            attribute_proc_layer=BoxCox(lambda_init=1.0,
-                                        batch_norm=keras.layers.BatchNormalization(center=False, scale=False)),
-            attribute_reg_layer=DefaultAttributeRegularizer(
-                beta_scheduler=get_scheduler(
-                    schedule_type=self.config["attr_beta_scheduler"]["type"],
-                    schedule_config=self.config["attr_beta_scheduler"]["config"]
+            attribute_regularizers={
+                "nf_ar": NormalizingFlowAttributeRegularizer(
+                    normalizing_flow=NormalizingFlow(
+                        bijectors=[BoxCox(), BatchNormalization()],
+                        add_loss=True,
+                        nll_weight_scheduler=get_scheduler(
+                            schedule_type=self.config["nll_weight_scheduler"]["type"],
+                            schedule_config=self.config["nll_weight_scheduler"]["config"]
+                        )
+                    ),
+                    reg_weight_scheduler=get_scheduler(
+                        schedule_type=self.config["attr_weight_scheduler"]["type"],
+                        schedule_config=self.config["attr_weight_scheduler"]["config"]
+                    )
                 )
-            )
+            }
         )
-        self._test_model(vae_model, "ar_pt_reg_trained_box_cox.keras")
-
-    def test_power_transform_regularization_yeo_johnson_model(self):
-        vae_model = self.get_hierarchical_model(
-            attribute_proc_layer=YeoJohnson(batch_norm=keras.layers.BatchNormalization(center=False, scale=False)),
-            attribute_reg_layer=DefaultAttributeRegularizer(
-                beta_scheduler=get_scheduler(
-                    schedule_type=self.config["attr_beta_scheduler"]["type"],
-                    schedule_config=self.config["attr_beta_scheduler"]["config"]
-                )
-            )
-        )
-        self._test_model(vae_model, "ar_pt_reg_trained_yeo_johnson.keras")
+        self._test_model(vae_model, "ar_pt_reg_trained.keras")
 
 
 if __name__ == '__main__':
