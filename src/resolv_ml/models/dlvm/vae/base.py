@@ -96,13 +96,13 @@ class VAE(keras.Model):
     def encode(self, inputs, training: bool = False, evaluate: bool = False):
         vae_input, aux_input = inputs
         input_processing_layer_out = self._input_processing_layer(vae_input, training=training)
-        posterior_dist, prior_dist = self._inference_layer((input_processing_layer_out, aux_input), training=training)
+        distributions = self._inference_layer((input_processing_layer_out, aux_input), training=training)
         z = self._sampling_layer(aux_input,
-                                 prior=prior_dist,
-                                 posterior=posterior_dist,
+                                 prior=distributions[1],
+                                 posterior=distributions[0],
                                  training=training,
                                  evaluate=evaluate)
-        return z, posterior_dist, prior_dist
+        return z, distributions[0], distributions[1]
 
     def sample(self, num_samples, training: bool = False, evaluate: bool = False):
         z = self._sampling_layer(num_samples,
