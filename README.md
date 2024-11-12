@@ -1,5 +1,5 @@
-# resolv-mir
-A library containing utilities for MIR
+# resolv-ml
+A library containing utilities for ML
 The packages / virtual env management software chosen is `poetry`.
 
 ## Local development
