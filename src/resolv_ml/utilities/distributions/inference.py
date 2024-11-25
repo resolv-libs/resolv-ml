@@ -88,29 +88,20 @@ class GaussianInference(Inference):
         return cls(mean_layer=mean_layer, sigma_layer=sigma_layer, **config)
 
 
-@keras.saving.register_keras_serializable(package="Inference", name="SamplingLayer")
-class SamplingLayer(keras.Layer):
+@keras.saving.register_keras_serializable(package="Inference", name="CategoricalInference")
+class CategoricalInference(Inference):
 
     def __init__(self,
-                 z_size: int,
-                 name: str = "sampling",
+                 codebook_size: int,
+                 name: str = "gaussian_inference",
                  **kwargs):
-        super(SamplingLayer, self).__init__(name=name, **kwargs)
-        self._z_size = z_size
+        super(CategoricalInference, self).__init__(name=name, **kwargs)
+        self._codebook_size = codebook_size
 
-    def compute_output_shape(self, input_shape, **kwargs):
-        return input_shape[0], self._z_size
+    def posterior_distribution(self, inputs, training: bool = False) -> tfd.Distribution:
+        probabilities = keras.ops.ones(self._codebook_size) / self._codebook_size
+        return tfd.Categorical(probs=probabilities)
 
-    def call(self,
-             inputs,
-             prior: tfd.Distribution,
-             posterior: tfd.Distribution = None,
-             training: bool = False,
-             evaluate: bool = False,
-             **kwargs):
-        if training or evaluate:
-            z = posterior.sample()
-        else:
-            num_sequences = inputs
-            z = prior.sample(sample_shape=(num_sequences,))
-        return z
+    def prior_distribution(self, training: bool = False) -> tfd.Distribution:
+        probabilities = keras.ops.ones(self._codebook_size) / self._codebook_size
+        return tfd.Categorical(probs=probabilities)

@@ -167,3 +167,5 @@ poetry.toml
 
 # Test
 /tests/**/output/
+/tests/config/
+/tests/data/

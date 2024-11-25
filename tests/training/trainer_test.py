@@ -21,7 +21,7 @@ class TestTrainer(unittest.TestCase):
 
     @property
     def input_dir(self):
-        return Path("./data")
+        return Path("./")
 
     @property
     def output_dir(self):
@@ -45,7 +45,7 @@ class TestTrainer(unittest.TestCase):
     def get_hierarchical_model(self) -> StandardVAE:
         model = StandardVAE(
             z_size=128,
-            input_processing_layer=encoders.BidirectionalRNNEncoder(
+            feature_extraction_layer=encoders.BidirectionalRNNEncoder(
                 enc_rnn_sizes=[16, 16],
                 embedding_layer=keras.layers.Embedding(130, 70, name="encoder_embedding")
             ),
@@ -84,7 +84,7 @@ class TestTrainer(unittest.TestCase):
     def get_flat_model(self) -> StandardVAE:
         model = StandardVAE(
             z_size=128,
-            input_processing_layer=encoders.BidirectionalRNNEncoder(
+            feature_extraction_layer=encoders.BidirectionalRNNEncoder(
                 enc_rnn_sizes=[16, 16],
                 embedding_layer=keras.layers.Embedding(130, 70, name="encoder_embedding")
             ),
@@ -125,7 +125,7 @@ class TestTrainer(unittest.TestCase):
 
         representation = PitchSequenceRepresentation(sequence_length=64)
         tfrecord_loader = TFRecordLoader(
-            file_pattern=f"{self.input_dir}/{name}.tfrecord",
+            file_pattern=f"{self.input_dir}/data/4bars_melodies/{name}.tfrecord",
             parse_fn=functools.partial(
                 representation.parse_example,
                 parse_sequence_feature=True,
@@ -144,7 +144,7 @@ class TestTrainer(unittest.TestCase):
         strategy = tf.distribute.get_strategy()
         with strategy.scope():
             vae_model = self.get_hierarchical_model()
-            trainer = Trainer(vae_model, config_file_path=self.input_dir / "trainer_config.json")
+            trainer = Trainer(vae_model, config_file_path=self.input_dir / "config" / "trainer_config.json")
             trainer.compile(
                 loss=losses.SparseCategoricalCrossentropy(from_logits=True),
                 metrics=[
@@ -163,7 +163,7 @@ class TestTrainer(unittest.TestCase):
             )
 
     def test_model_inference(self):
-        loaded_model = keras.saving.load_model(self.output_dir / "runs/checkpoints/epoch_01-val_loss_18.36.keras",
+        loaded_model = keras.saving.load_model(self.output_dir / "runs/checkpoints/epoch_01-val_loss_11.46.keras",
                                                compile=False)
         loaded_model.compile(run_eagerly=True)
         logging.info("Testing model inference...")
@@ -172,7 +172,7 @@ class TestTrainer(unittest.TestCase):
         self.assertTrue(predicted_sequences.shape == (32, 64))
         logging.info("Testing model inference with encoding...")
         test_sequences = self.load_dataset("test_pitchseq")
-        predicted_sequences, latent_codes, _, _ = loaded_model.predict(x=test_sequences, batch_size=32)
+        predicted_sequences, latent_codes, _, _, _ = loaded_model.predict(x=test_sequences, batch_size=32)
         self.assertTrue(predicted_sequences.shape[-1] == 64)
         self.assertTrue(latent_codes.shape[-1] == 128)
         logging.info("Testing model sampling...")

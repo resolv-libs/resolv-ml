@@ -10,18 +10,18 @@ from deepdiff import DeepDiff
 from resolv_pipelines.data.loaders import TFRecordLoader
 from resolv_pipelines.data.representation.mir import PitchSequenceRepresentation
 
-from resolv_ml.models.dlvm.vae.vanilla_vae import StandardVAE
+from resolv_ml.models.dlvm.vae.vq_vae import VQVAE
 from resolv_ml.models.seq2seq.rnn import encoders, decoders
 from resolv_ml.utilities.schedulers import get_scheduler
 
 
-class Seq2SeqStandardVAETest(unittest.TestCase):
+class Seq2SeqVQVAETest(unittest.TestCase):
 
     @property
     def config(self):
         return {
-            "input_dir": Path("./data"),
-            "output_dir": Path("./output/models/dlvm/vae/standard-vae/seq2seq"),
+            "input_dir": Path("./"),
+            "output_dir": Path("./output/models/dlvm/vae/vq-vae/seq2seq"),
             "batch_size": 32,
             "sequence_length": 64,
             "sequence_features": 1,
@@ -31,23 +31,14 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
             "dec_rnn_sizes": [16, 16],
             "level_lengths": [4, 4, 4],
             "dropout": 0.0,
-            "z_size": 128,
+            "z_size": 32,
+            "codebook_size": 64,
             "sampling_scheduler": {
                 "type": "constant",
                 "config": {
                     "value": 0.5
                 }
-            },
-            "div_beta_scheduler": {
-                "type": "exponential",
-                "config": {
-                    "rate": 0.0,
-                    "min_value": 0.0,
-                    "max_value": 1.0,
-                    "decay": False,
-                }
-            },
-            "free_bits": 0.0
+            }
         }
 
     def setUp(self):
@@ -62,9 +53,10 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
         aux_input_shape = self.config["batch_size"], 1
         return input_seq_shape, aux_input_shape
 
-    def get_autoregressive_model(self) -> StandardVAE:
-        model = StandardVAE(
+    def get_autoregressive_model(self) -> VQVAE:
+        model = VQVAE(
             z_size=self.config["z_size"],
+            codebook_size=self.config["codebook_size"],
             feature_extraction_layer=encoders.BidirectionalRNNEncoder(
                 enc_rnn_sizes=self.config["enc_rnn_sizes"],
                 embedding_layer=self.get_embedding_layer("encoder_embedding"),
@@ -79,44 +71,7 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
                     schedule_type=self.config["sampling_scheduler"]["type"],
                     schedule_config=self.config["sampling_scheduler"]["config"]
                 )
-            ),
-            div_beta_scheduler=get_scheduler(
-                schedule_type=self.config["div_beta_scheduler"]["type"],
-                schedule_config=self.config["div_beta_scheduler"]["config"]
-            ),
-            free_bits=self.config["free_bits"]
-        )
-        model.build(self.get_input_shape())
-        return model
-
-    def get_hierarchical_model(self) -> StandardVAE:
-        model = StandardVAE(
-            z_size=self.config["z_size"],
-            feature_extraction_layer=encoders.BidirectionalRNNEncoder(
-                enc_rnn_sizes=self.config["enc_rnn_sizes"],
-                embedding_layer=self.get_embedding_layer("encoder_embedding"),
-                dropout=self.config["dropout"]
-            ),
-            generative_layer=decoders.HierarchicalRNNDecoder(
-                level_lengths=self.config["level_lengths"],
-                core_decoder=decoders.RNNAutoregressiveDecoder(
-                    dec_rnn_sizes=self.config["dec_rnn_sizes"],
-                    num_classes=self.config["vocabulary_size"],
-                    embedding_layer=self.get_embedding_layer("decoder_embedding"),
-                    dropout=self.config["dropout"],
-                    sampling_scheduler=get_scheduler(
-                        schedule_type=self.config["sampling_scheduler"]["type"],
-                        schedule_config=self.config["sampling_scheduler"]["config"]
-                    )
-                ),
-                dec_rnn_sizes=self.config["dec_rnn_sizes"],
-                dropout=self.config["dropout"]
-            ),
-            div_beta_scheduler=get_scheduler(
-                schedule_type=self.config["div_beta_scheduler"]["type"],
-                schedule_config=self.config["div_beta_scheduler"]["config"]
-            ),
-            free_bits=self.config["free_bits"]
+            )
         )
         model.build(self.get_input_shape())
         return model
@@ -130,7 +85,7 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
 
         representation = PitchSequenceRepresentation(sequence_length=self.config["sequence_length"])
         tfrecord_loader = TFRecordLoader(
-            file_pattern=f"{self.config['input_dir']}/4bars_melodies/{name}.tfrecord",
+            file_pattern=f"{self.config['input_dir']}/data/4bars_melodies/{name}.tfrecord",
             parse_fn=functools.partial(
                 representation.parse_example,
                 parse_sequence_feature=True
@@ -143,7 +98,7 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
         )
         return tfrecord_loader.load_dataset()
 
-    def _test_model(self, vae_model: StandardVAE, output_name: str):
+    def _test_model(self, vae_model: VQVAE, output_name: str):
         vae_model.compile(
             optimizer=keras.optimizers.Adam(learning_rate=0.001),
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
@@ -203,18 +158,6 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
     def test_ar_seq2seq_vae_model(self):
         vae_model = self.get_autoregressive_model()
         self._test_model(vae_model, "ar_seq2seq_vae_trained.keras")
-
-    def test_hier_seq2seq_vae_save_and_loading(self):
-        vae_model = self.get_hierarchical_model()
-        vae_model.save(self.config["output_dir"] / "hier_seq2seq_vae.keras")
-        loaded_model = keras.saving.load_model(self.config["output_dir"] / "hier_seq2seq_vae.keras")
-        # Use DeepDiff to ignore tuple to list type change in config comparison
-        diff = DeepDiff(loaded_model.get_config(), vae_model.get_config(), ignore_type_in_groups=(list, tuple))
-        self.assertTrue(not diff)
-
-    def test_hier_seq2seq_vae_model(self):
-        vae_model = self.get_hierarchical_model()
-        self._test_model(vae_model, "hier_seq2seq_vae_trained.keras")
 
 
 if __name__ == '__main__':

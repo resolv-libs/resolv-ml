@@ -94,7 +94,7 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
                                inference_layer: keras.Layer = None) -> AttributeRegularizedVAE:
         model = AttributeRegularizedVAE(
             z_size=self.config["z_size"],
-            input_processing_layer=encoders.BidirectionalRNNEncoder(
+            feature_extraction_layer=encoders.BidirectionalRNNEncoder(
                 enc_rnn_sizes=self.config["enc_rnn_sizes"],
                 embedding_layer=self.get_embedding_layer("encoder_embedding"),
                 dropout=self.config["dropout"]

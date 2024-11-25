@@ -87,6 +87,8 @@ class SequenceDecoder(keras.Model):
             return self.decode(input_sequence, aux_inputs, z, sampling_probability, **kwargs)
         else:
             z, seq_length = inputs
+            if len(seq_length.shape) > 1:
+                seq_length = seq_length.shape[1]
             return self.sample(z, seq_length, sampling_mode, temperature, **kwargs)
 
     def get_config(self):

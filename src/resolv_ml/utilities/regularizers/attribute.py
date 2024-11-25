@@ -44,7 +44,7 @@ class AttributeRegularizer(Regularizer):
                                      training: bool = False,
                                      evaluate: bool = False,
                                      **kwargs):
-        _, attributes, z, _ = inputs
+        _, attributes, _, z, _, = inputs
         latent_codes = keras.ops.expand_dims(z[:, self._regularization_dimension], axis=-1)
         reg_loss = self._compute_attribute_regularization_loss(latent_codes, attributes, prior, posterior,
                                                                current_step, training, evaluate)

@@ -5,7 +5,7 @@ import keras
 from tensorflow_probability import distributions as tfd
 
 from .base import VAE
-from ....utilities.distributions.inference import GaussianInference, SamplingLayer
+from ....utilities.distributions.inference import GaussianInference
 from ....utilities.regularizers.divergence import DivergenceRegularizer
 from ....utilities.schedulers import Scheduler
 
@@ -15,7 +15,7 @@ class StandardVAE(VAE):
 
     def __init__(self,
                  z_size: int,
-                 input_processing_layer: keras.Layer,
+                 feature_extraction_layer: keras.Layer,
                  generative_layer: keras.Layer,
                  inference_layer: keras.Layer = None,
                  aux_input_processing_layer: keras.Layer = None,
@@ -27,7 +27,7 @@ class StandardVAE(VAE):
         self._div_beta_scheduler = div_beta_scheduler
         self._free_bits = free_bits
         super(StandardVAE, self).__init__(
-            input_processing_layer=input_processing_layer,
+            feature_extraction_layer=feature_extraction_layer,
             generative_layer=generative_layer,
             inference_layer=GaussianInference(
                 z_size=z_size,
@@ -56,7 +56,7 @@ class StandardVAE(VAE):
             "z_size": self._z_size,
             "div_beta_scheduler": keras.saving.serialize_keras_object(self._div_beta_scheduler),
             "free_bits": self._free_bits,
-            "input_processing_layer": keras.saving.serialize_keras_object(self._input_processing_layer),
+            "feature_extraction_layer": keras.saving.serialize_keras_object(self._feature_extraction_layer),
             "generative_layer": keras.saving.serialize_keras_object(self._generative_layer),
             "inference_layer": keras.saving.serialize_keras_object(self._inference_layer)
         }
@@ -64,14 +64,38 @@ class StandardVAE(VAE):
 
     @classmethod
     def from_config(cls, config, custom_objects=None):
-        input_processing_layer = keras.saving.deserialize_keras_object(config.pop("input_processing_layer"))
+        feature_extraction_layer = keras.saving.deserialize_keras_object(config.pop("feature_extraction_layer"))
         generative_layer = keras.saving.deserialize_keras_object(config.pop("generative_layer"))
         inference_layer = keras.saving.deserialize_keras_object(config.pop("inference_layer"))
         div_beta_scheduler = keras.saving.deserialize_keras_object(config.pop("div_beta_scheduler"))
         return cls(
-            input_processing_layer=input_processing_layer,
+            feature_extraction_layer=feature_extraction_layer,
             generative_layer=generative_layer,
             inference_layer=inference_layer,
             div_beta_scheduler=div_beta_scheduler,
             **config
         )
+
+
+@keras.saving.register_keras_serializable(package="VAE", name="SamplingLayer")
+class SamplingLayer(keras.Layer):
+
+    def __init__(self,
+                 z_size: int,
+                 name: str = "sampling",
+                 **kwargs):
+        super(SamplingLayer, self).__init__(name=name, **kwargs)
+        self._z_size = z_size
+
+    def compute_output_shape(self, input_shape, **kwargs):
+        vae_input_shape, _, _ = input_shape
+        return vae_input_shape[0], self._z_size
+
+    def call(self,
+             inputs,
+             prior: tfd.Distribution,
+             posterior: tfd.Distribution = None,
+             training: bool = False,
+             evaluate: bool = False,
+             **kwargs):
+        return posterior.sample() if training or evaluate else prior.sample(sample_shape=(inputs,))
