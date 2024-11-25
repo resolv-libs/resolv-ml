@@ -101,7 +101,7 @@ class VAE(keras.Model):
                                  posterior=distributions[0],
                                  training=training,
                                  evaluate=evaluate)
-        return input_features, z, distributions[1], distributions[0]
+        return input_features, z, distributions[0], distributions[1]
 
     def sample(self, num_samples, training: bool = False, evaluate: bool = False):
         z = self._sampling_layer(num_samples,

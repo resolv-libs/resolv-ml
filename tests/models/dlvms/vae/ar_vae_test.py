@@ -16,7 +16,7 @@ from resolv_ml.models.dlvm.vae.ar_vae import AttributeRegularizedVAE
 from resolv_ml.utilities.bijectors import BatchNormalization, BoxCox
 from resolv_ml.utilities.regularizers.attribute import (DefaultAttributeRegularizer, SignAttributeRegularizer,
                                                         NormalizingFlowAttributeRegularizer, AttributeRegularizer)
-from resolv_ml.models.seq2seq.rnn import encoders, decoders
+from resolv_ml.models.nn.seq2seq.rnn import encoders, decoders
 from resolv_ml.utilities.schedulers import get_scheduler
 
 
@@ -135,7 +135,7 @@ class Seq2SeqAttributeRegularizedVAETest(unittest.TestCase):
 
         representation = PitchSequenceRepresentation(sequence_length=self.config["sequence_length"])
         tfrecord_loader = TFRecordLoader(
-            file_pattern=f"{self.config['input_dir']}/{name}.tfrecord",
+            file_pattern=f"{self.config['input_dir']}/4bars_melodies/{name}.tfrecord",
             parse_fn=functools.partial(
                 representation.parse_example,
                 parse_sequence_feature=True,
