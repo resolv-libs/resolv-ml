@@ -80,8 +80,8 @@ class VAE(keras.Model):
             if len(inputs[0].shape) == 0:
                 # First input is a scalar that defines the number of samples (generation mode)
                 z = self._sampling_layer(inputs=inputs[0],
-                                         prior=self._inference_layer.prior_distribution(training=training))
-                outputs = self.decode((z, *inputs[1:]))
+                                         prior=self._inference_layer.prior_distribution())
+                outputs = self.decode((z, *inputs[1:])) if len(inputs) > 1 else self.decode(z)
                 return outputs, z
             else:
                 # Inputs are tensors (encoding-decoding mode)
