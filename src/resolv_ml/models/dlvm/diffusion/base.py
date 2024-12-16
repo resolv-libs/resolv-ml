@@ -1,5 +1,5 @@
 # TODO - DOC
-from typing import Tuple, List
+from typing import Tuple
 
 import keras
 from ....utilities.tensors.ops import batch_tensor

@@ -18,7 +18,7 @@ class DDIM(DiffusionModel):
                  eta: float = 0.,
                  sampling_timesteps: int = 100,
                  timesteps_scheduler_type: str = 'uniform',
-                 name: str = "ddpm",
+                 name: str = "ddim",
                  **kwargs):
         super(DDIM, self).__init__(
             z_shape=z_shape,
