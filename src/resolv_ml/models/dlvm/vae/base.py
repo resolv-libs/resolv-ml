@@ -27,6 +27,9 @@ class VAE(keras.Model):
         self._regularizers = regularizers
         self._evaluation_mode = False
 
+    def get_latent_space_shape(self):
+        raise NotImplementedError("Subclasses must implement the get_latent_space_shape method.")
+
     def build(self, input_shape):
         super().build(input_shape)
         vae_input_shape, aux_input_shape = input_shape

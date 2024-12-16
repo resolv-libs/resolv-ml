@@ -47,6 +47,9 @@ class StandardVAE(VAE):
             **kwargs
         )
 
+    def get_latent_space_shape(self):
+        return (self._z_size,)
+
     def build(self, input_shape):
         super().build(input_shape)
 

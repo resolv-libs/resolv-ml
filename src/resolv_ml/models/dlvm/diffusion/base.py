@@ -2,6 +2,8 @@
 from typing import Tuple
 
 import keras
+
+from ....utilities.schedulers.noise import NoiseScheduler
 from ....utilities.tensors.ops import batch_tensor
 
 
@@ -27,7 +29,11 @@ class DiffusionModel(keras.Model):
         self._noise_schedule_start = noise_schedule_start
         self._noise_schedule_end = noise_schedule_end
         self._noise_level_conditioning = noise_level_conditioning
-        self._build_noise_schedule()
+        self._noise_scheduler = NoiseScheduler(
+            noise_schedule_type=noise_schedule_type,
+            noise_schedule_start=noise_schedule_start,
+            noise_schedule_end=noise_schedule_end
+        )
         self._evaluation_mode = False
         self._ddpm_loss_tracker = keras.metrics.Mean(name=f"{name}_loss")
 
@@ -74,10 +80,10 @@ class DiffusionModel(keras.Model):
         """
         assert 0 <= timestep < self._timesteps, f"Invalid timestep: {timestep}"
         batch_size, input_shape = keras.ops.shape(x)[0], keras.ops.shape(x)[2:]
-        sqrt_alpha_cumprod = self._get_noise_schedule_tensor(self._sqrt_alpha_cumprod, timestep, batch_size,
-                                                             input_shape)
-        sqrt_one_minus_alpha_cumprod = self._get_noise_schedule_tensor(self._sqrt_one_minus_alpha_cumprod, timestep, batch_size,
-                                                                       input_shape)
+        sqrt_alpha_cumprod = self._noise_scheduler.get_tensor("sqrt_alpha_cumprod", timestep, batch_size, input_shape)
+        sqrt_one_minus_alpha_cumprod = self._noise_scheduler.get_tensor(
+            "sqrt_one_minus_alpha_cumprod", timestep, batch_size, input_shape
+        )
         x_expanded = keras.ops.cast(keras.ops.expand_dims(x, axis=1), dtype=sqrt_alpha_cumprod.dtype)
         noise = keras.random.normal(shape=(batch_size, 1, *input_shape))
         noisy_inputs = sqrt_alpha_cumprod * x_expanded + sqrt_one_minus_alpha_cumprod * noise
@@ -117,71 +123,15 @@ class DiffusionModel(keras.Model):
         self._evaluation_mode = False
         return eval_output
 
-    def _build_noise_schedule(self):
-        if self._noise_schedule_type == "linear":
-            beta = keras.ops.linspace(self._noise_schedule_start, self._noise_schedule_end, self._timesteps)
-            self._alpha = 1.0 - beta
-        elif self._noise_schedule_type == "cosine":
-            # TODO - Noise schedulers
-            beta = 0
-            self._alpha = 1.0 - beta
-        elif self._noise_schedule_type == "sqrt":
-            # TODO - Noise schedulers
-            beta = 0
-            self._alpha = 1.0 - beta
-        else:
-            raise ValueError(f"Unsupported noise schedule type: {self._noise_schedule_type}")
-        self._sqrt_alpha = keras.ops.sqrt(self._alpha)
-        self._one_minus_alpha = 1.0 - self._alpha
-        self._sqrt_one_minus_alpha = keras.ops.sqrt(self._one_minus_alpha)
-        self._alpha_cumprod = keras.ops.cumprod(self._alpha)
-        self._one_minus_alpha_cumprod = 1.0 - self._alpha_cumprod
-        self._sqrt_alpha_cumprod = keras.ops.sqrt(self._alpha_cumprod)
-        self._sqrt_one_minus_alpha_cumprod = keras.ops.sqrt(self._one_minus_alpha_cumprod)
-
-    def _get_noise_schedule_tensor(self,
-                                   tensor,
-                                   timestep: int = None,
-                                   batch_size: int = None,
-                                   input_shape: Tuple[int] = None):
-        tensor = keras.ops.take(tensor, timestep) if timestep is not None else tensor
-        if input_shape:
-            tensor = keras.ops.reshape(tensor, newshape=[1] * (len(input_shape) + 1))
-        if batch_size:
-            tensor = batch_tensor(tensor, batch_size)
-        return tensor
-
-    def _get_prev_noise_schedule_tensor(self,
-                                        tensor,
-                                        timestep: int = None,
-                                        batch_size: int = None,
-                                        input_shape: Tuple[int] = None,
-                                        first_tensor_type: str = "ones"):
-        # Timestep < 0 means that we are at step 0 of the denoising process, return a tensor of ones or zeros according
-        # to the specified type
-        if timestep and timestep < 0:
-            if first_tensor_type == "ones":
-                first_tensor = keras.ops.convert_to_tensor([1.])
-            elif first_tensor_type == "zeros":
-                first_tensor = keras.ops.convert_to_tensor([0.])
-            else:
-                raise ValueError(f"Unsupported first tensor type: {first_tensor_type}")
-            return self._get_prev_noise_schedule_tensor(first_tensor, batch_size=batch_size, input_shape=input_shape)
-
-        return self._get_noise_schedule_tensor(
-            tensor, timestep=timestep, batch_size=batch_size, input_shape=input_shape
-        )
-
     def _get_denoiser_conditioning(self, noisy_input, timestep: int, training: bool = False):
         batch_size = noisy_input.shape[0]
         denoiser_cond = timestep
         if self._noise_level_conditioning:
-            sqrt_alpha_cumprod = self._get_noise_schedule_tensor(self._sqrt_alpha_cumprod, timestep=timestep)
+            sqrt_alpha_cumprod = self._noise_scheduler.get_tensor("sqrt_alpha_cumprod", timestep=timestep)
             denoiser_cond = sqrt_alpha_cumprod
             if training:
-                sqrt_alpha_cumprod_prev = self._get_prev_noise_schedule_tensor(
-                    self._sqrt_alpha_cumprod, timestep=timestep
-                )
+                prev_timestep = timestep - 1
+                sqrt_alpha_cumprod_prev = self._noise_scheduler.get_tensor("sqrt_alpha_cumprod", timestep=prev_timestep)
                 denoiser_cond = keras.random.uniform(
                     shape=(), minval=sqrt_alpha_cumprod_prev, maxval=sqrt_alpha_cumprod
                 )

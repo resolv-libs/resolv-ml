@@ -51,17 +51,17 @@ class DDIM(DiffusionModel):
         batch_size, input_shape = noisy_input.shape[0], noisy_input.shape[2:]
         noise = keras.random.normal(shape=keras.ops.shape(noisy_input)) \
             if timestep else keras.ops.zeros_like(noisy_input)
-        sqrt_alpha_cumprod = self._get_noise_schedule_tensor(
-            self._sqrt_alpha_cumprod, timestep, batch_size, input_shape
+        sqrt_alpha_cumprod = self._noise_scheduler.get_tensor(
+            "sqrt_alpha_cumprod", timestep, batch_size, input_shape
         )
-        sqrt_one_minus_alpha_cumprod = self._get_noise_schedule_tensor(
-            self._sqrt_one_minus_alpha_cumprod, timestep, batch_size, input_shape
+        sqrt_one_minus_alpha_cumprod = self._noise_scheduler.get_tensor(
+            "sqrt_one_minus_alpha_cumprod", timestep, batch_size, input_shape
         )
-        sqrt_alpha_cumprod_prev = self._get_prev_noise_schedule_tensor(
-            self._sqrt_alpha_cumprod, prev_timestep, batch_size, input_shape
+        sqrt_alpha_cumprod_prev = self._noise_scheduler.get_tensor(
+            "sqrt_alpha_cumprod", prev_timestep, batch_size, input_shape
         )
-        one_minus_alpha_cumprod_prev = self._get_prev_noise_schedule_tensor(
-            self._one_minus_alpha_cumprod, prev_timestep, batch_size, input_shape, "zeros"
+        one_minus_alpha_cumprod_prev = self._noise_scheduler.get_tensor(
+            "one_minus_alpha_cumprod", prev_timestep, batch_size, input_shape, first_tensor_type="zeros"
         )
         std = self._get_posterior_std(noisy_input, timestep, prev_timestep)
         pred_x_0 = (noisy_input - sqrt_one_minus_alpha_cumprod * pred_noise) / sqrt_alpha_cumprod
@@ -86,15 +86,17 @@ class DDIM(DiffusionModel):
         if not self._eta:
             return keras.ops.zeros_like(noisy_input)
         # Compute coefficient c1 = [sqrt(1 - alpha_t_1) / sqrt(1 - alpha_t)]
-        sqrt_one_minus_alpha_cumprod = self._get_noise_schedule_tensor(self._sqrt_one_minus_alpha_cumprod,
-                                                                       timestep=timestep)
-        sqrt_one_minus_alpha_cumprod_prev = self._get_prev_noise_schedule_tensor(self._sqrt_one_minus_alpha_cumprod,
-                                                                                 timestep=prev_timestep)
+        sqrt_one_minus_alpha_cumprod = self._noise_scheduler.get_tensor(
+            "sqrt_one_minus_alpha_cumprod", timestep=timestep
+        )
+        sqrt_one_minus_alpha_cumprod_prev = self._noise_scheduler.get_tensor(
+            "sqrt_one_minus_alpha_cumprod", timestep=prev_timestep, first_tensor_type="zeros"
+        )
         c1 = sqrt_one_minus_alpha_cumprod_prev / sqrt_one_minus_alpha_cumprod
         # Compute coefficient c2 = [1 - (alpha_t / alpha_t_1)]
-        alpha_cumprod = self._get_noise_schedule_tensor(self._alpha_cumprod, timestep=timestep)
-        alpha_cumprod_prev = self._get_prev_noise_schedule_tensor(self._alpha_cumprod, timestep=prev_timestep)
+        alpha_cumprod = self._noise_scheduler.get_tensor("alpha_cumprod", timestep=timestep)
+        alpha_cumprod_prev = self._noise_scheduler.get_prev_tensor("alpha_cumprod", timestep=prev_timestep)
         c2 = keras.ops.sqrt(1 - alpha_cumprod / alpha_cumprod_prev)
         # Compute posterior variance
         posterior_variance = self._eta * c1 * c2
-        return self._get_noise_schedule_tensor(posterior_variance, batch_size, input_shape)
+        return self._noise_scheduler.get_tensor(posterior_variance, batch_size, input_shape)

@@ -33,16 +33,17 @@ class DDPM(DiffusionModel):
         # Use log variance for numerical stability
         self._posterior_variance_type = posterior_variance_type
         if self._posterior_variance_type == "upper_bound":
-            self._posterior_log_variance = keras.ops.log(self._one_minus_alpha)
+            self._posterior_log_variance = keras.ops.log(self._noise_scheduler.get_tensor("alpha"))
         elif self._posterior_variance_type == "lower_bound":
-            one_minus_alpha_cumprod_prev = keras.ops.concatenate([keras.ops.convert_to_tensor([0.]),
-                                                                 self._one_minus_alpha_cumprod[:-1]])
-            pairwise_cumprod_div = one_minus_alpha_cumprod_prev / self._one_minus_alpha_cumprod
-            self._posterior_log_variance = keras.ops.log(self._one_minus_alpha * pairwise_cumprod_div)
+            one_minus_alpha = self._noise_scheduler.get_tensor("one_minus_alpha")
+            one_minus_alpha_cumprod = self._noise_scheduler.get_tensor("one_minus_alpha_cumprod")
+            one_minus_alpha_cumprod_prev = keras.ops.concatenate(
+                [keras.ops.convert_to_tensor([0.]), one_minus_alpha_cumprod[:-1]]
+            )
+            pairwise_cumprod_div = one_minus_alpha_cumprod_prev / one_minus_alpha_cumprod
+            self._posterior_log_variance = keras.ops.log(one_minus_alpha * pairwise_cumprod_div)
         else:
             raise ValueError(f"Unknown posterior variance type: {posterior_variance_type}")
-        self._rec_sqrt_alpha = 1 / self._sqrt_alpha
-        self._div_one_minus_alpha_sqrt_cumprod = self._one_minus_alpha / self._sqrt_one_minus_alpha_cumprod
 
     def sample(self, noisy_input):
         denoised_inputs = []
@@ -59,11 +60,13 @@ class DDPM(DiffusionModel):
         batch_size, input_shape = noisy_input.shape[0], noisy_input.shape[2:]
         noise = keras.random.normal(shape=keras.ops.shape(noisy_input)) \
             if timestep else keras.ops.zeros_like(noisy_input)
-        rec_sqrt_alpha = self._get_noise_schedule_tensor(self._rec_sqrt_alpha, timestep, batch_size, input_shape)
-        div_one_minus_alpha_sqrt_cumprod = self._get_noise_schedule_tensor(
-            self._div_one_minus_alpha_sqrt_cumprod, timestep, batch_size, input_shape
+        rec_sqrt_alpha = self._noise_scheduler.get_tensor(
+            "rec_sqrt_alpha", timestep, batch_size, input_shape
         )
-        posterior_log_variance = self._get_noise_schedule_tensor(
+        div_one_minus_alpha_sqrt_cumprod = self._noise_scheduler.get_tensor(
+            "div_one_minus_alpha_sqrt_cumprod", timestep, batch_size, input_shape
+        )
+        posterior_log_variance = self._noise_scheduler.get_tensor(
             self._posterior_log_variance, timestep, batch_size, input_shape
         )
         std = keras.ops.exp(0.5 * posterior_log_variance)
