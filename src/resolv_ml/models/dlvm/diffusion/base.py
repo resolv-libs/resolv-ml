@@ -46,11 +46,13 @@ class DiffusionModel(keras.Model):
 
     def call(self, inputs, training: bool = False):
         if training or self._evaluation_mode:
-            diffusion_input, _ = inputs
+            diffusion_input, conditioning_input = inputs
             # Monte Carlo sampling of timestep during training TODO - Antithetic sampling
             timestep = keras.random.randint(shape=(), minval=0, maxval=self._timesteps)
             noisy_input, noise = self.forward_diffusion(diffusion_input, timestep=timestep)
-            pred_noise = self.predict_noise(noisy_input, timestep=timestep, training=training)
+            pred_noise = self.predict_noise(
+                noisy_input, cond_input=conditioning_input, timestep=timestep, training=training
+            )
             diffusion_loss = self._loss_fn(noise, pred_noise)
             self.add_loss(diffusion_loss)
             self._ddpm_loss_tracker.update_state(diffusion_loss)
@@ -89,11 +91,13 @@ class DiffusionModel(keras.Model):
         noisy_inputs = sqrt_alpha_cumprod * x_expanded + sqrt_one_minus_alpha_cumprod * noise
         return noisy_inputs, noise
 
-    def predict_noise(self, noisy_input, timestep: int, training: bool = False):
+    def predict_noise(self, noisy_input, timestep: int, cond_input=None, training: bool = False):
         # Build the conditioning signal for the denoising model - shape (batch_size, timesteps)
-        denoiser_cond = self._get_denoiser_conditioning(noisy_input, timestep=timestep, training=training)
+        denoiser_t_cond = self._get_denoiser_timestep_cond(noisy_input, timestep=timestep, training=training)
         # Predict the noise. Shape: (batch_size, timesteps, *input_shape)
-        pred_noise = self._denoiser((noisy_input, denoiser_cond), training=training)
+        denoiser_input = (noisy_input, denoiser_t_cond) if cond_input is None \
+            else (noisy_input, cond_input, denoiser_t_cond)
+        pred_noise = self._denoiser(denoiser_input, training=training)
         return pred_noise
 
     def evaluate(
@@ -123,7 +127,7 @@ class DiffusionModel(keras.Model):
         self._evaluation_mode = False
         return eval_output
 
-    def _get_denoiser_conditioning(self, noisy_input, timestep: int, training: bool = False):
+    def _get_denoiser_timestep_cond(self, noisy_input, timestep: int, training: bool = False):
         batch_size = noisy_input.shape[0]
         denoiser_cond = timestep
         if self._noise_level_conditioning:
