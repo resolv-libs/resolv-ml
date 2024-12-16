@@ -29,8 +29,9 @@ class LatentDiffusion(keras.Model):
 
     def call(self, inputs, training: bool = None):
         if training or self._evaluation_mode:
-            _, z, _, _ = self._vae.encode(inputs, training=training)
-            return self._diffusion(z, training=training)
+            vae_input, cond_input = inputs
+            _, z, _, _ = self._vae.encode((vae_input, cond_input), training=training)
+            return self._diffusion((z, cond_input), training=training)
         else:
             z = self._diffusion(inputs, training=training)
             return self._vae.decode(z)
