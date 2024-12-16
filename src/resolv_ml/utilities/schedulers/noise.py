@@ -71,7 +71,7 @@ class NoiseScheduler:
         tensor = self._schedule_tensors[tensor] if isinstance(tensor, str) else tensor
         tensor = keras.ops.take(tensor, timestep) if timestep is not None else tensor
         if input_shape:
-            tensor = keras.ops.reshape(tensor, newshape=[1] * (len(input_shape) + 1))
+            tensor = keras.ops.reshape(tensor, newshape=[1] * len(input_shape))
         if batch_size:
             tensor = batch_tensor(tensor, batch_size)
         return tensor

@@ -52,12 +52,12 @@ class DDPM(DiffusionModel):
         for timestep in range(self._timesteps - 1, -1, -1):
             pred_noise = self.predict_noise(x_t, timestep=timestep, training=False)
             x_t = self.denoise(x_t, pred_noise, timestep=timestep)
-            denoised_inputs.append(keras.ops.squeeze(x_t, axis=1))
+            denoised_inputs.append(x_t)
             predicted_noise.append(pred_noise)
         return keras.ops.stack(denoised_inputs, axis=1), keras.ops.stack(predicted_noise, axis=1)
 
     def denoise(self, noisy_input, pred_noise, timestep: int):
-        batch_size, input_shape = noisy_input.shape[0], noisy_input.shape[2:]
+        batch_size, input_shape = noisy_input.shape[0], noisy_input.shape[1:]
         noise = keras.random.normal(shape=keras.ops.shape(noisy_input)) \
             if timestep else keras.ops.zeros_like(noisy_input)
         rec_sqrt_alpha = self._noise_scheduler.get_tensor(

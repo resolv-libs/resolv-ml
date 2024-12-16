@@ -40,15 +40,16 @@ class DDIM(DiffusionModel):
         denoised_inputs = []
         predicted_noise = []
         x_t = noisy_input
-        for timestep, prev_timestep in self._get_ddim_timesteps():
+        ddim_timesteps = self._get_ddim_timesteps()
+        for timestep, prev_timestep in ddim_timesteps:
             pred_noise = self.predict_noise(x_t, timestep=timestep, training=False)
             x_t = self.denoise(x_t, pred_noise, timestep=timestep, prev_timestep=prev_timestep)
-            denoised_inputs.append(keras.ops.squeeze(x_t, axis=1))
+            denoised_inputs.append(x_t)
             predicted_noise.append(pred_noise)
         return keras.ops.stack(denoised_inputs, axis=1), keras.ops.stack(predicted_noise, axis=1)
 
     def denoise(self, noisy_input, pred_noise, timestep: int, prev_timestep: int):
-        batch_size, input_shape = noisy_input.shape[0], noisy_input.shape[2:]
+        batch_size, input_shape = noisy_input.shape[0], noisy_input.shape[1:]
         noise = keras.random.normal(shape=keras.ops.shape(noisy_input)) \
             if timestep else keras.ops.zeros_like(noisy_input)
         sqrt_alpha_cumprod = self._noise_scheduler.get_tensor(
@@ -82,7 +83,7 @@ class DDIM(DiffusionModel):
         return zip(reversed(ddim_timesteps), reversed(prev_timestep))
 
     def _get_posterior_std(self, noisy_input, timestep: int, prev_timestep: int):
-        batch_size, input_shape = noisy_input.shape[0], noisy_input.shape[2:]
+        batch_size, input_shape = noisy_input.shape[0], noisy_input.shape[1:]
         if not self._eta:
             return keras.ops.zeros_like(noisy_input)
         # Compute coefficient c1 = [sqrt(1 - alpha_t_1) / sqrt(1 - alpha_t)]

@@ -13,6 +13,19 @@ from resolv_pipelines.data.representation.mir import PitchSequenceRepresentation
 from resolv_ml.models.dlvm.diffusion.ddpm import DDPM
 
 
+class Denoiser(keras.Layer):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.dense1 = keras.layers.Dense(128)
+        self.dense2 = keras.layers.Dense(1, activation="relu")
+
+    def call(self, inputs, training=None, mask=None):
+        noisy_input, _, _ = inputs
+        a = self.dense1(noisy_input)
+        return self.dense2(a)
+
+
 class DDPMTest(unittest.TestCase):
 
     @property
@@ -39,8 +52,7 @@ class DDPMTest(unittest.TestCase):
     def get_ddpm_model(self) -> DDPM:
         model = DDPM(
             z_shape=(self.config["z_size"], self.config["sequence_features"]),
-            # TODO - Insert real denoising layer
-            denoiser=keras.layers.Lambda(lambda x: x[0]),
+            denoiser=Denoiser(),
             timesteps=self.config["timesteps"],
             noise_level_conditioning=True
         )
@@ -81,13 +93,13 @@ class DDPMTest(unittest.TestCase):
             epochs=5,
             steps_per_epoch=5
         )
-        # ddpm_model.save(self.config["output_dir"] / output_name)
-        # # TODO - loading VAE with compile=True does not work after training (seems a Keras bug on optimizers)
-        # loaded_model = keras.saving.load_model(self.config["output_dir"] / output_name, compile=False)
-        # loaded_model.compile(run_eagerly=True)
-        # # Use DeepDiff to ignore tuple to list type change in config comparison
-        # diff = DeepDiff(loaded_model.get_config(), ddpm_model.get_config(), ignore_type_in_groups=(list, tuple))
-        # self.assertTrue(not diff)
+        ddpm_model.save(self.config["output_dir"] / output_name)
+        # TODO - loading VAE with compile=True does not work after training (seems a Keras bug on optimizers)
+        loaded_model = keras.saving.load_model(self.config["output_dir"] / output_name, compile=False)
+        loaded_model.compile(run_eagerly=True)
+        # Use DeepDiff to ignore tuple to list type change in config comparison
+        diff = DeepDiff(loaded_model.get_config(), ddpm_model.get_config(), ignore_type_in_groups=(list, tuple))
+        self.assertTrue(not diff)
         logging.info("Testing model inference...")
         num_sequences = self.config["batch_size"]
         predicted_sequences, predicted_noise, z = ddpm_model.predict(

@@ -33,8 +33,10 @@ class LatentDiffusion(keras.Model):
             _, z, _, _ = self._vae.encode((vae_input, cond_input), training=training)
             return self._diffusion((z, cond_input), training=training)
         else:
-            z = self._diffusion(inputs, training=training)
-            return self._vae.decode(z)
+            n_samples, *decoder_inputs = inputs
+            z, pred_noise, _ = self._diffusion((n_samples,), training=training)
+            output = self._vae.decode((z[:, -1, ...], *decoder_inputs))
+            return output, pred_noise, z
 
     def evaluate(
             self,
@@ -76,7 +78,7 @@ class LatentDiffusion(keras.Model):
         vae = keras.saving.deserialize_keras_object(config.pop("vae"))
         diffusion = keras.saving.deserialize_keras_object(config.pop("diffusion"))
         return cls(
-            vae=diffusion,
-            loss_fn=vae,
+            vae=vae,
+            diffusion=diffusion,
             **config
         )

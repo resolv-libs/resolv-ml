@@ -41,8 +41,9 @@ class DiffusionModel(keras.Model):
         raise NotImplementedError("Subclasses must implement the sample method.")
 
     def build(self, input_shape):
-        super().build(input_shape)
-        self._denoiser.build(input_shape)
+        diffusion_input_shape = input_shape[0]
+        super().build(diffusion_input_shape)
+        self._denoiser.build(diffusion_input_shape)
 
     def call(self, inputs, training: bool = False):
         if training or self._evaluation_mode:
@@ -60,7 +61,7 @@ class DiffusionModel(keras.Model):
         else:
             # Input is a scalar that defines the number of samples (generation mode)
             n_samples = inputs[0]
-            z = keras.random.normal(shape=(n_samples, 1, *self._z_shape))
+            z = keras.random.normal(shape=(n_samples, *self._z_shape))
             denoised_inputs, pred_noise = self.sample(z)
             return denoised_inputs, pred_noise, z
 
@@ -81,7 +82,7 @@ class DiffusionModel(keras.Model):
                    which was generated and applied. Shape (batch_size, timesteps, *input_shape)
         """
         assert 0 <= timestep < self._timesteps, f"Invalid timestep: {timestep}"
-        batch_size, input_shape = keras.ops.shape(x)[0], keras.ops.shape(x)[2:]
+        batch_size, input_shape = keras.ops.shape(x)[0], keras.ops.shape(x)[1:]
         sqrt_alpha_cumprod = self._noise_scheduler.get_tensor("sqrt_alpha_cumprod", timestep, batch_size, input_shape)
         sqrt_one_minus_alpha_cumprod = self._noise_scheduler.get_tensor(
             "sqrt_one_minus_alpha_cumprod", timestep, batch_size, input_shape
@@ -95,9 +96,7 @@ class DiffusionModel(keras.Model):
         # Build the conditioning signal for the denoising model - shape (batch_size, timesteps)
         denoiser_t_cond = self._get_denoiser_timestep_cond(noisy_input, timestep=timestep, training=training)
         # Predict the noise. Shape: (batch_size, timesteps, *input_shape)
-        denoiser_input = (noisy_input, denoiser_t_cond) if cond_input is None \
-            else (noisy_input, cond_input, denoiser_t_cond)
-        pred_noise = self._denoiser(denoiser_input, training=training)
+        pred_noise = self._denoiser((noisy_input, cond_input, denoiser_t_cond), training=training)
         return pred_noise
 
     def evaluate(
