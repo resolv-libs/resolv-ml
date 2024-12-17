@@ -2,6 +2,7 @@
 import keras
 
 
+@keras.saving.register_keras_serializable(package="Embeddings", name="SinusoidalPositionalEncoding")
 class SinusoidalPositionalEncoding(keras.Layer):
     """
     SinusoidalPositionalEncoding is a layer for computing fixed sinusoidal positional encodings.
@@ -71,3 +72,14 @@ class SinusoidalPositionalEncoding(keras.Layer):
             return keras.ops.take(self.positional_encoding, positions, axis=0)
         else:
             return self._compute_positional_encoding(positions)
+
+    def get_config(self):
+        base_config = super().get_config()
+        config = {
+            "embedding_dim": self.embedding_dim,
+            "max_seq_length": self.max_seq_length,
+            "frequency_base": self.frequency_base,
+            "frequency_scaling": self.frequency_scaling,
+            "lookup_table": self.lookup_table
+        }
+        return {**base_config, **config}

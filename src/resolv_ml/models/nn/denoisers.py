@@ -1,9 +1,9 @@
 # TODO - DOC
 import keras
 
-from ...nn.base import ResidualBlock
-from ...nn.embeddings import SinusoidalPositionalEncoding
-from ...nn.film import FiLM, FeatureWiseAffine
+from resolv_ml.models.nn.base import ResidualBlock
+from resolv_ml.models.nn.embeddings import SinusoidalPositionalEncoding
+from resolv_ml.models.nn.film import FiLM, FeatureWiseAffine
 
 
 @keras.saving.register_keras_serializable(package="Denoisers", name="DenseDenoiser")
@@ -51,6 +51,14 @@ class DenseDenoiser(keras.Layer):
                 output = self._dense_layers[i](output)
             return output
 
+        def get_config(self):
+            base_config = super().get_config()
+            config = {
+                "units": self.units,
+                "num_layers": self.num_layers
+            }
+            return {**base_config, **config}
+
     def __init__(self,
                  units: int = 2048,
                  num_layers: int = 3,
@@ -97,3 +105,20 @@ class DenseDenoiser(keras.Layer):
         for layer in self._cond_layers:
             output = layer(output)
         return output
+
+    def get_config(self):
+        base_config = super().get_config()
+        config = {
+            "positional_encoding_layer": keras.saving.serialize_keras_object(self.positional_encoding_layer),
+            "units": self.units,
+            "num_layers": self.num_layers
+        }
+        return {**base_config, **config}
+
+    @classmethod
+    def from_config(cls, config, custom_objects=None):
+        positional_encoding_layer = keras.saving.deserialize_keras_object(config.pop("positional_encoding_layer"))
+        return cls(
+            positional_encoding_layer=positional_encoding_layer,
+            **config
+        )

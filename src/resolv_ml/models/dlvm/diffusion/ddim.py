@@ -97,8 +97,17 @@ class DDIM(DiffusionModel):
         c1 = sqrt_one_minus_alpha_cumprod_prev / sqrt_one_minus_alpha_cumprod
         # Compute coefficient c2 = [1 - (alpha_t / alpha_t_1)]
         alpha_cumprod = self._noise_scheduler.get_tensor("alpha_cumprod", timestep=timestep)
-        alpha_cumprod_prev = self._noise_scheduler.get_prev_tensor("alpha_cumprod", timestep=prev_timestep)
+        alpha_cumprod_prev = self._noise_scheduler.get_tensor("alpha_cumprod", timestep=prev_timestep)
         c2 = keras.ops.sqrt(1 - alpha_cumprod / alpha_cumprod_prev)
         # Compute posterior variance
         posterior_variance = self._eta * c1 * c2
-        return self._noise_scheduler.get_tensor(posterior_variance, batch_size, input_shape)
+        return self._noise_scheduler.get_tensor(posterior_variance, batch_size=batch_size, input_shape=input_shape)
+
+    def get_config(self):
+        base_config = super().get_config()
+        config = {
+            "eta": self._eta,
+            "sampling_timesteps": self._sampling_timesteps,
+            "timesteps_scheduler_type": self._timesteps_scheduler_type
+        }
+        return {**base_config, **config}

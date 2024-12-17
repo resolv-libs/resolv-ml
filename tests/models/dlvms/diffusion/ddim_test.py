@@ -11,7 +11,7 @@ from resolv_pipelines.data.loaders import TFRecordLoader
 from resolv_pipelines.data.representation.mir import PitchSequenceRepresentation
 
 from resolv_ml.models.dlvm.diffusion.ddim import DDIM
-from resolv_ml.models.dlvm.diffusion.denoisers import DenseDenoiser
+from resolv_ml.models.nn.denoisers import DenseDenoiser
 
 
 class DDIMTest(unittest.TestCase):
@@ -26,7 +26,7 @@ class DDIMTest(unittest.TestCase):
             "sequence_features": 1,
             "z_size": 64,
             "timesteps": 1000,
-            "eta": 0,
+            "eta": 5.,
             "sampling_timesteps": 10,
             "timesteps_scheduler_type": "uniform"
         }
@@ -48,7 +48,7 @@ class DDIMTest(unittest.TestCase):
             noise_level_conditioning=True,
             eta=self.config["eta"],
             sampling_timesteps=self.config["sampling_timesteps"],
-            timesteps_scheduler_type=self.config["timesteps_scheduler_type"]
+            timesteps_scheduler_type=self.config["timesteps_scheduler_type"],
         )
         model.build(self.get_input_shape())
         return model

@@ -5,6 +5,7 @@ import keras
 from keras.src import activations
 
 
+@keras.saving.register_keras_serializable(package="FilM", name="FilM")
 class FiLM(keras.Layer):
     """
     Applies Feature-wise Linear Modulation (FiLM) to input layers, enabling input-
@@ -58,6 +59,7 @@ class FiLM(keras.Layer):
         )
 
 
+@keras.saving.register_keras_serializable(package="FilM", name="FeatureWiseAffine")
 class FeatureWiseAffine(keras.layers.Layer):
     """
     Applies feature-wise affine transformation to the input tensor. This layer modifies
@@ -84,3 +86,15 @@ class FeatureWiseAffine(keras.layers.Layer):
         if self.activation:
             output = self.activation(output)
         return output
+
+    def get_config(self):
+        base_config = super().get_config()
+        config = {
+            "activation": keras.saving.serialize_keras_object(self.activation)
+        }
+        return {**base_config, **config}
+
+    @classmethod
+    def from_config(cls, config, custom_objects=None):
+        activation = keras.saving.deserialize_keras_object(config.pop("activation"))
+        return cls(activation=activation, **config)

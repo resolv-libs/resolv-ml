@@ -11,7 +11,7 @@ from resolv_pipelines.data.loaders import TFRecordLoader
 from resolv_pipelines.data.representation.mir import PitchSequenceRepresentation
 
 from resolv_ml.models.dlvm.diffusion.ddim import DDIM
-from resolv_ml.models.dlvm.diffusion.denoisers import DenseDenoiser
+from resolv_ml.models.nn.denoisers import DenseDenoiser
 from resolv_ml.models.dlvm.misc.latent_diffusion import LatentDiffusion
 
 
