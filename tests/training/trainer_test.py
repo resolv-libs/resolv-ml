@@ -11,7 +11,7 @@ from resolv_pipelines.data.loaders import TFRecordLoader
 from resolv_pipelines.data.representation.mir import PitchSequenceRepresentation
 
 from resolv_ml.models.dlvm.vae.vanilla_vae import StandardVAE
-from resolv_ml.models.seq2seq.rnn import encoders, decoders
+from resolv_ml.models.autoregressive.rnn import encoders, decoders
 from resolv_ml.training.callbacks import LearningRateLoggerCallback
 from resolv_ml.training.trainer import Trainer
 from resolv_ml.utilities.schedulers import get_scheduler
