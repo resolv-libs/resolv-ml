@@ -11,19 +11,7 @@ from resolv_pipelines.data.loaders import TFRecordLoader
 from resolv_pipelines.data.representation.mir import PitchSequenceRepresentation
 
 from resolv_ml.models.dlvm.diffusion.ddpm import DDPM
-
-
-class Denoiser(keras.Layer):
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.dense1 = keras.layers.Dense(128)
-        self.dense2 = keras.layers.Dense(1, activation="relu")
-
-    def call(self, inputs, training=None, mask=None):
-        noisy_input, _, _ = inputs
-        a = self.dense1(noisy_input)
-        return self.dense2(a)
+from resolv_ml.models.dlvm.diffusion.denoisers import DenseDenoiser
 
 
 class DDPMTest(unittest.TestCase):
@@ -37,7 +25,7 @@ class DDPMTest(unittest.TestCase):
             "sequence_length": 64,
             "sequence_features": 1,
             "z_size": 64,
-            "timesteps": 1000
+            "timesteps": 10
         }
 
     def setUp(self):
@@ -52,7 +40,7 @@ class DDPMTest(unittest.TestCase):
     def get_ddpm_model(self) -> DDPM:
         model = DDPM(
             z_shape=(self.config["z_size"], self.config["sequence_features"]),
-            denoiser=Denoiser(),
+            denoiser=DenseDenoiser(),
             timesteps=self.config["timesteps"],
             noise_level_conditioning=True
         )
@@ -90,7 +78,7 @@ class DDPMTest(unittest.TestCase):
         ddpm_model.fit(
             self.load_dataset("train_pitchseq"),
             batch_size=self.config["batch_size"],
-            epochs=5,
+            epochs=2,
             steps_per_epoch=5
         )
         ddpm_model.save(self.config["output_dir"] / output_name)

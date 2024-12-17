@@ -21,17 +21,23 @@ class LatentDiffusion(keras.Model):
         self._diffusion = diffusion
         self._vae.trainable = False
         self._evaluation_mode = False
+        self._diff_loss_tracker = keras.metrics.Mean(name=f"{diffusion.name}_loss")
 
     def build(self, input_shape):
-        self._vae.build(input_shape)
-        vae_latent_space_shape = self._vae.get_latent_space_shape()
-        self._diffusion.build(vae_latent_space_shape)
+        if not self._vae.built:
+            self._vae.build(input_shape)
+        if not self._diffusion.built:
+            vae_input_shape, cond_input_shape = input_shape
+            vae_latent_space_shape = self._vae.get_latent_space_shape()
+            self._diffusion.build((vae_latent_space_shape, cond_input_shape))
 
     def call(self, inputs, training: bool = None):
         if training or self._evaluation_mode:
             vae_input, cond_input = inputs
             _, z, _, _ = self._vae.encode((vae_input, cond_input), training=training)
-            return self._diffusion((z, cond_input), training=training)
+            noise, pred_noise, timestep, loss = self._diffusion((z, cond_input), training=training)
+            self._diff_loss_tracker.update_state(loss)
+            return noise, pred_noise, timestep
         else:
             n_samples, *decoder_inputs = inputs
             z, pred_noise, _ = self._diffusion((n_samples,), training=training)

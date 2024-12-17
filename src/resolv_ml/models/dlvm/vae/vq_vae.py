@@ -9,7 +9,7 @@ from ....utilities.distributions.inference import CategoricalInference
 from ....utilities.math.distances import sqrt_euclidean_distance
 from ....utilities.regularizers.codebook import VectorQuantizationRegularizer, CommitmentRegularizer
 from ....utilities.schedulers import Scheduler
-from ....utilities.tensors.ops import batch_tensor
+from resolv_ml.utilities.ops import batch_tensor
 
 
 @keras.saving.register_keras_serializable(package="VAE", name="VQ-VAE")

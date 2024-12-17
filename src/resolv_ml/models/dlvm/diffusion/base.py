@@ -4,7 +4,7 @@ from typing import Tuple
 import keras
 
 from ....utilities.schedulers.noise import NoiseScheduler
-from ....utilities.tensors.ops import batch_tensor
+from resolv_ml.utilities.ops import batch_tensor
 
 
 class DiffusionModel(keras.Model):
@@ -35,15 +35,17 @@ class DiffusionModel(keras.Model):
             noise_schedule_end=noise_schedule_end
         )
         self._evaluation_mode = False
-        self._ddpm_loss_tracker = keras.metrics.Mean(name=f"{name}_loss")
 
     def sample(self, z):
         raise NotImplementedError("Subclasses must implement the sample method.")
 
     def build(self, input_shape):
         diffusion_input_shape = input_shape[0]
+        batch_size = diffusion_input_shape[0]
+        conditioning_input_shape = batch_size, 1
         super().build(diffusion_input_shape)
-        self._denoiser.build(diffusion_input_shape)
+        if not self._denoiser.built:
+            self._denoiser.build((diffusion_input_shape, conditioning_input_shape))
 
     def call(self, inputs, training: bool = False):
         if training or self._evaluation_mode:
@@ -56,8 +58,7 @@ class DiffusionModel(keras.Model):
             )
             diffusion_loss = self._loss_fn(noise, pred_noise)
             self.add_loss(diffusion_loss)
-            self._ddpm_loss_tracker.update_state(diffusion_loss)
-            return noise, pred_noise, timestep
+            return noise, pred_noise, timestep, diffusion_loss
         else:
             # Input is a scalar that defines the number of samples (generation mode)
             n_samples = inputs[0]
@@ -87,9 +88,9 @@ class DiffusionModel(keras.Model):
         sqrt_one_minus_alpha_cumprod = self._noise_scheduler.get_tensor(
             "sqrt_one_minus_alpha_cumprod", timestep, batch_size, input_shape
         )
-        x_expanded = keras.ops.cast(keras.ops.expand_dims(x, axis=1), dtype=sqrt_alpha_cumprod.dtype)
-        noise = keras.random.normal(shape=(batch_size, 1, *input_shape))
-        noisy_inputs = sqrt_alpha_cumprod * x_expanded + sqrt_one_minus_alpha_cumprod * noise
+        x = keras.ops.cast(x, dtype=sqrt_alpha_cumprod.dtype)
+        noise = keras.random.normal(shape=(batch_size, *input_shape))
+        noisy_inputs = sqrt_alpha_cumprod * x + sqrt_one_minus_alpha_cumprod * noise
         return noisy_inputs, noise
 
     def predict_noise(self, noisy_input, timestep: int, cond_input=None, training: bool = False):

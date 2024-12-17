@@ -4,6 +4,7 @@ import keras
 from .base import DiffusionModel
 
 
+@keras.saving.register_keras_serializable(package="Diffusion", name="DDIM")
 class DDIM(DiffusionModel):
 
     def __init__(self,

@@ -1,5 +1,8 @@
 # TODO - DOC
+from typing import Any
+
 import keras
+from keras.src import activations
 
 
 class FiLM(keras.Layer):
@@ -65,12 +68,19 @@ class FeatureWiseAffine(keras.layers.Layer):
     :ivar name: Name of the layer instance.
     :type name: str
     """
-    def __init__(self, name="feature_wise_affine", **kwargs):
+    def __init__(self,
+                 activation: Any = None,
+                 name="feature_wise_affine",
+                 **kwargs):
         super(FeatureWiseAffine, self).__init__(name=name, **kwargs)
+        self.activation = activations.get(activation)
 
     def call(self, inputs, training: bool = False):
         x, scale, shift = inputs
         for _ in range(len(x.shape) - 2):
-            scale = keras.ops.expand_dims(scale, axis=-1)
-            shift = keras.ops.expand_dims(shift, axis=-1)
-        return scale * x + shift
+            scale = keras.ops.expand_dims(scale, axis=1)
+            shift = keras.ops.expand_dims(shift, axis=1)
+        output = scale * x + shift
+        if self.activation:
+            output = self.activation(output)
+        return output

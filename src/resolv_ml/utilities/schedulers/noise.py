@@ -2,7 +2,7 @@ from typing import Tuple
 
 import keras
 
-from ...utilities.tensors.ops import batch_tensor
+from resolv_ml.utilities.ops import batch_tensor
 
 
 def get_noise_schedule(timesteps: int = 1000,
