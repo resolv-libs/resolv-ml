@@ -55,6 +55,20 @@ class SinusoidalPositionalEncoding(keras.Layer):
         return input_shape[0], self.embedding_dim
 
     def _compute_positional_encoding(self, positions):
+        """
+        Computes the positional encoding for a given set of positions using sinusoidal functions.
+        This encoding is commonly applied in models such as Transformers to inject positional information
+        into input embeddings. The method generates sine and cosine terms based on the position indexes
+        and transforms them into a suitable representation for input sequences.
+        The argument of the sin and cos functions are computed with the formula:
+            positions/10000^(2i/d) = positions * exp(-2i/d * log(frequency_base))
+
+        :param positions: Input tensor defining positions for which the positional encoding will be computed.
+            The tensor can either be a 1-D or 2-D tensor. Its shape depends on the sequence
+            and dimensional requirements of the model.
+        :return: A tensor representing the computed positional encoding with sine and cosine terms for
+            each position. The tensor's shape aligns with model-specific embedding dimensions requirements.
+        """
         positions = keras.ops.expand_dims(positions, axis=1) if len(positions.shape) == 1 else positions
         positions = keras.ops.cast(positions, dtype="float32")
         div_term = keras.ops.exp(
