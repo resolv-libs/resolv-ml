@@ -71,6 +71,7 @@ class DenseDenoiser(keras.Layer):
         self.num_layers = num_layers
 
     def build(self, input_shape):
+        super().build(input_shape)
         x_shape, conditioning_shape = input_shape
         _, embedding_channels = self.positional_encoding_layer.compute_output_shape(conditioning_shape)
         dense_units = embedding_channels * 4
@@ -88,6 +89,8 @@ class DenseDenoiser(keras.Layer):
             ) for _ in range(self.num_layers)
         ]
         self._output_layers = [keras.layers.LayerNormalization(), keras.layers.Dense(x_shape[-1])]
+        # Call the layer with placeholder inputs to build it
+        self.call(inputs=[keras.Input(shape=x_shape), None, keras.Input(shape=(x_shape[0], 1))])
 
     def call(self, inputs, training: bool = False):
         x, _, conditioning = inputs
