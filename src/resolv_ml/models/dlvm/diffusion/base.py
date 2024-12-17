@@ -1,5 +1,5 @@
 # TODO - DOC
-from typing import Tuple
+from typing import Tuple, Any
 
 import keras
 
@@ -13,7 +13,7 @@ class DiffusionModel(keras.Model):
                  z_shape: Tuple[int],
                  denoiser: keras.Layer,
                  timesteps: int = 1000,
-                 loss_fn: keras.losses.Loss = keras.losses.MeanSquaredError(),
+                 loss_fn: Any = "MeanSquaredError",
                  noise_schedule_type: str = "linear",
                  noise_schedule_start: float = 1e-4,
                  noise_schedule_end: float = 0.02,
@@ -24,7 +24,7 @@ class DiffusionModel(keras.Model):
         self._z_shape = z_shape
         self._denoiser = denoiser
         self._timesteps = timesteps
-        self._loss_fn = loss_fn
+        self._loss_fn = keras.losses.get(loss_fn)
         self._noise_schedule_type = noise_schedule_type
         self._noise_schedule_start = noise_schedule_start
         self._noise_schedule_end = noise_schedule_end

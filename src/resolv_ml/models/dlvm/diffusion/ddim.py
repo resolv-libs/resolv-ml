@@ -1,4 +1,6 @@
 # TODO - DOC
+from typing import Any
+
 import keras
 
 from .base import DiffusionModel
@@ -11,7 +13,7 @@ class DDIM(DiffusionModel):
                  z_shape,
                  denoiser: keras.Layer,
                  timesteps: int,
-                 loss_fn: keras.losses.Loss = keras.losses.MeanSquaredError(),
+                 loss_fn: Any = "MeanSquaredError",
                  noise_schedule_type: str = "linear",
                  noise_schedule_start: float = 1e-4,
                  noise_schedule_end: float = 0.02,
