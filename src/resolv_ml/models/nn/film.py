@@ -6,6 +6,7 @@ class FiLM(keras.Layer):
     """
     Applies Feature-wise Linear Modulation (FiLM) to input layers, enabling input-
     conditional modifications by coupling learned scale and shift parameters.
+    Paper reference: https://arxiv.org/abs/1709.07871 by Perez et al. 2017
 
     FiLM is designed to facilitate conditional processing of input data by applying
     affine transformations determined by the `gamma_layer` and `beta_layer`. These
@@ -22,8 +23,8 @@ class FiLM(keras.Layer):
     :type beta_layer: keras.layers.Layer
     """
     def __init__(self,
-                 gamma_layer: keras.Layer = keras.layers.Dense(128),
-                 beta_layer: keras.Layer = keras.layers.Dense(128),
+                 gamma_layer: keras.Layer = keras.layers.Dense(2048),
+                 beta_layer: keras.Layer = keras.layers.Dense(2048),
                  name="film",
                  **kwargs):
         super(FiLM, self).__init__(name=name, **kwargs)
