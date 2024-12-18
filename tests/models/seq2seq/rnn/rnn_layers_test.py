@@ -5,7 +5,7 @@ from pathlib import Path
 import keras
 from deepdiff import DeepDiff
 
-import resolv_ml.models.autoregressive.rnn.layers as rnn_layers
+import resolv_ml.models.nn.seq2seq.rnn.layers as rnn_layers
 
 
 class TestInitialRNNCellStateFromEmbedding(unittest.TestCase):
