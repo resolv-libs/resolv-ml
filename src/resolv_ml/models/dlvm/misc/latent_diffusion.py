@@ -34,14 +34,16 @@ class LatentDiffusion(keras.Model):
     def call(self, inputs, training: bool = None):
         if training or self._evaluation_mode:
             vae_input, cond_input = inputs
-            _, z, _, _ = self._vae.encode((vae_input, cond_input), training=training)
+            _, z, _, _ = self._vae.encode((vae_input, cond_input), training=training, evaluate=self._evaluation_mode)
             noise, pred_noise, timestep, loss = self._diffusion((z, cond_input), training=training)
             self._diff_loss_tracker.update_state(loss)
             return noise, pred_noise, timestep
         else:
             n_samples, *decoder_inputs = inputs
             z, pred_noise, _ = self._diffusion((n_samples,), training=training)
-            output = self._vae.decode((z[:, -1, ...], *decoder_inputs))
+            output = self._vae.decode(
+                inputs=(z[:, -1, ...], *decoder_inputs), training=training, evaluate=self._evaluation_mode
+            )
             return output, pred_noise, z
 
     def evaluate(

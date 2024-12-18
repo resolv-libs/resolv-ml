@@ -25,7 +25,7 @@ class TestTrainer(unittest.TestCase):
 
     @property
     def output_dir(self):
-        return Path("./output/trainer/")
+        return Path("./output/trainer/vae")
 
     def setUp(self):
         os.environ["KERAS_BACKEND"] = "tensorflow"
@@ -45,7 +45,7 @@ class TestTrainer(unittest.TestCase):
     def get_hierarchical_model(self) -> StandardVAE:
         model = StandardVAE(
             z_size=128,
-            feature_extraction_layer=encoders.BidirectionalRNNEncoder(
+            input_processing_layer=encoders.BidirectionalRNNEncoder(
                 enc_rnn_sizes=[16, 16],
                 embedding_layer=keras.layers.Embedding(130, 70, name="encoder_embedding")
             ),
@@ -144,7 +144,9 @@ class TestTrainer(unittest.TestCase):
         strategy = tf.distribute.get_strategy()
         with strategy.scope():
             vae_model = self.get_hierarchical_model()
-            trainer = Trainer(vae_model, config_file_path=self.input_dir / "config" / "trainer_config.json")
+            trainer = Trainer(
+                vae_model, config_file_path=self.input_dir / "config" / "vae_trainer_config.json"
+            )
             trainer.compile(
                 loss=losses.SparseCategoricalCrossentropy(from_logits=True),
                 metrics=[
@@ -163,7 +165,7 @@ class TestTrainer(unittest.TestCase):
             )
 
     def test_model_inference(self):
-        loaded_model = keras.saving.load_model(self.output_dir / "runs/checkpoints/epoch_01-val_loss_11.46.keras",
+        loaded_model = keras.saving.load_model(self.output_dir / "runs/checkpoints/epoch_01-val_loss_8.93.keras",
                                                compile=False)
         loaded_model.compile(run_eagerly=True)
         logging.info("Testing model inference...")
