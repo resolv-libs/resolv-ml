@@ -57,6 +57,8 @@ class LatentDiffusion(keras.Model):
             **kwargs
     ):
         self._evaluation_mode = True
+        self._diffusion._evaluation_mode = True
+        self._vae._evaluation_mode = True
         eval_output = super().evaluate(
             x=x,
             y=y,
@@ -69,6 +71,8 @@ class LatentDiffusion(keras.Model):
             **kwargs
         )
         self._evaluation_mode = False
+        self._diffusion._evaluation_mode = False
+        self._vae._evaluation_mode = False
         return eval_output
 
     def get_config(self):
