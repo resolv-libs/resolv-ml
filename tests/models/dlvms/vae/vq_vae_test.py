@@ -57,7 +57,7 @@ class Seq2SeqVQVAETest(unittest.TestCase):
         model = VQVAE(
             z_size=self.config["z_size"],
             codebook_size=self.config["codebook_size"],
-            feature_extraction_layer=encoders.BidirectionalRNNEncoder(
+            input_processing_layer=encoders.BidirectionalRNNEncoder(
                 enc_rnn_sizes=self.config["enc_rnn_sizes"],
                 embedding_layer=self.get_embedding_layer("encoder_embedding"),
                 dropout=self.config["dropout"]

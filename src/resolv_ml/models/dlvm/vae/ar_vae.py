@@ -13,7 +13,7 @@ class AttributeRegularizedVAE(StandardVAE):
 
     def __init__(self,
                  z_size: int,
-                 feature_extraction_layer: keras.Layer,
+                 input_processing_layer: keras.Layer,
                  generative_layer: keras.Layer,
                  attribute_processing_layer: keras.Layer,
                  attribute_regularizers: Dict[str, AttributeRegularizer],
@@ -26,7 +26,7 @@ class AttributeRegularizedVAE(StandardVAE):
         self._attribute_regularizers = attribute_regularizers
         super(AttributeRegularizedVAE, self).__init__(
             z_size=z_size,
-            feature_extraction_layer=feature_extraction_layer,
+            input_processing_layer=input_processing_layer,
             aux_input_processing_layer=attribute_processing_layer,
             generative_layer=generative_layer,
             inference_layer=inference_layer,
@@ -47,13 +47,13 @@ class AttributeRegularizedVAE(StandardVAE):
 
     @classmethod
     def from_config(cls, config, custom_objects=None):
-        feature_extraction_layer = keras.saving.deserialize_keras_object(config.pop("feature_extraction_layer"))
+        input_processing_layer = keras.saving.deserialize_keras_object(config.pop("input_processing_layer"))
         generative_layer = keras.saving.deserialize_keras_object(config.pop("generative_layer"))
         inference_layer = keras.saving.deserialize_keras_object(config.pop("inference_layer"))
         attribute_proc_layer = keras.saving.deserialize_keras_object(config.pop("attribute_processing_layer"))
         attribute_regularizers = keras.saving.deserialize_keras_object(config.pop("attribute_regularizers"))
         return cls(
-            feature_extraction_layer=feature_extraction_layer,
+            input_processing_layer=input_processing_layer,
             generative_layer=generative_layer,
             inference_layer=inference_layer,
             attribute_processing_layer=attribute_proc_layer,

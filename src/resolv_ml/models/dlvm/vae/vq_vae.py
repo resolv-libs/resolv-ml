@@ -18,7 +18,7 @@ class VQVAE(VAE):
     def __init__(self,
                  z_size: int,
                  codebook_size: int,
-                 feature_extraction_layer: keras.Layer,
+                 input_processing_layer: keras.Layer,
                  generative_layer: keras.Layer,
                  aux_input_processing_layer: keras.Layer = None,
                  vq_scheduler: Scheduler = None,
@@ -30,7 +30,7 @@ class VQVAE(VAE):
         self._vq_scheduler = vq_scheduler
         self._commitment_scheduler = commitment_scheduler
         super(VQVAE, self).__init__(
-            feature_extraction_layer=feature_extraction_layer,
+            input_processing_layer=input_processing_layer,
             generative_layer=generative_layer,
             inference_layer=CategoricalInference(
                 codebook_size=codebook_size,
@@ -59,19 +59,19 @@ class VQVAE(VAE):
             "codebook_size": self._codebook_size,
             "vq_scheduler": keras.saving.serialize_keras_object(self._vq_scheduler),
             "commitment_scheduler": keras.saving.serialize_keras_object(self._commitment_scheduler),
-            "feature_extraction_layer": keras.saving.serialize_keras_object(self._feature_extraction_layer),
+            "input_processing_layer": keras.saving.serialize_keras_object(self._input_processing_layer),
             "generative_layer": keras.saving.serialize_keras_object(self._generative_layer)
         }
         return {**base_config, **config}
 
     @classmethod
     def from_config(cls, config, custom_objects=None):
-        feature_extraction_layer = keras.saving.deserialize_keras_object(config.pop("feature_extraction_layer"))
+        input_processing_layer = keras.saving.deserialize_keras_object(config.pop("input_processing_layer"))
         generative_layer = keras.saving.deserialize_keras_object(config.pop("generative_layer"))
         vq_scheduler = keras.saving.deserialize_keras_object(config.pop("vq_scheduler"))
         commitment_scheduler = keras.saving.deserialize_keras_object(config.pop("commitment_scheduler"))
         return cls(
-            feature_extraction_layer=feature_extraction_layer,
+            input_processing_layer=input_processing_layer,
             generative_layer=generative_layer,
             vq_scheduler=vq_scheduler,
             commitment_scheduler=commitment_scheduler,

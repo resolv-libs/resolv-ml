@@ -10,7 +10,7 @@ from ....utilities.regularizers.base import Regularizer
 class VAE(keras.Model):
 
     def __init__(self,
-                 feature_extraction_layer: keras.Layer,
+                 input_processing_layer: keras.Layer,
                  inference_layer: Inference,
                  sampling_layer: keras.Layer,
                  generative_layer: keras.Layer,
@@ -19,7 +19,7 @@ class VAE(keras.Model):
                  name: str = "vae",
                  **kwargs):
         super(VAE, self).__init__(name=name, **kwargs)
-        self._feature_extraction_layer = feature_extraction_layer
+        self._input_processing_layer = input_processing_layer
         self._inference_layer = inference_layer
         self._sampling_layer = sampling_layer
         self._generative_layer = generative_layer
@@ -35,11 +35,11 @@ class VAE(keras.Model):
         vae_input_shape, aux_input_shape = input_shape
         if len(aux_input_shape) == 1:
             aux_input_shape = tuple(aux_input_shape) + (1,)
-        if not self._feature_extraction_layer.built:
-            self._feature_extraction_layer.build(vae_input_shape)
+        if not self._input_processing_layer.built:
+            self._input_processing_layer.build(vae_input_shape)
         if self._aux_input_processing_layer and not self._aux_input_processing_layer.built:
             self._aux_input_processing_layer.build(aux_input_shape)
-        feature_extraction_out_shape = self._feature_extraction_layer.compute_output_shape(vae_input_shape)
+        feature_extraction_out_shape = self._input_processing_layer.compute_output_shape(vae_input_shape)
         aux_input_processing_out_shape = aux_input_shape if not self._aux_input_processing_layer else \
             self._aux_input_processing_layer.compute_output_shape(aux_input_shape)
         if not self._inference_layer.built:
@@ -97,7 +97,7 @@ class VAE(keras.Model):
 
     def encode(self, inputs, training: bool = False, evaluate: bool = False):
         vae_input, aux_input = inputs
-        input_features = self._feature_extraction_layer(vae_input, training=training)
+        input_features = self._input_processing_layer(vae_input, training=training)
         distributions = self._inference_layer((input_features, aux_input), training=training)
         z = self._sampling_layer((vae_input, aux_input, input_features),
                                  prior=distributions[1],

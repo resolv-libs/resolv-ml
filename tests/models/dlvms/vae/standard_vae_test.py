@@ -65,7 +65,7 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
     def get_autoregressive_model(self) -> StandardVAE:
         model = StandardVAE(
             z_size=self.config["z_size"],
-            feature_extraction_layer=encoders.BidirectionalRNNEncoder(
+            input_processing_layer=encoders.BidirectionalRNNEncoder(
                 enc_rnn_sizes=self.config["enc_rnn_sizes"],
                 embedding_layer=self.get_embedding_layer("encoder_embedding"),
                 dropout=self.config["dropout"]
@@ -92,7 +92,7 @@ class Seq2SeqStandardVAETest(unittest.TestCase):
     def get_hierarchical_model(self) -> StandardVAE:
         model = StandardVAE(
             z_size=self.config["z_size"],
-            feature_extraction_layer=encoders.BidirectionalRNNEncoder(
+            input_processing_layer=encoders.BidirectionalRNNEncoder(
                 enc_rnn_sizes=self.config["enc_rnn_sizes"],
                 embedding_layer=self.get_embedding_layer("encoder_embedding"),
                 dropout=self.config["dropout"]

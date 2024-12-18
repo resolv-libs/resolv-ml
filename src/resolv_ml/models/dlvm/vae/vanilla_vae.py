@@ -15,7 +15,7 @@ class StandardVAE(VAE):
 
     def __init__(self,
                  z_size: int,
-                 feature_extraction_layer: keras.Layer,
+                 input_processing_layer: keras.Layer,
                  generative_layer: keras.Layer,
                  inference_layer: keras.Layer = None,
                  aux_input_processing_layer: keras.Layer = None,
@@ -27,7 +27,7 @@ class StandardVAE(VAE):
         self._div_beta_scheduler = div_beta_scheduler
         self._free_bits = free_bits
         super(StandardVAE, self).__init__(
-            feature_extraction_layer=feature_extraction_layer,
+            input_processing_layer=input_processing_layer,
             generative_layer=generative_layer,
             inference_layer=GaussianInference(
                 z_size=z_size,
@@ -59,7 +59,7 @@ class StandardVAE(VAE):
             "z_size": self._z_size,
             "div_beta_scheduler": keras.saving.serialize_keras_object(self._div_beta_scheduler),
             "free_bits": self._free_bits,
-            "feature_extraction_layer": keras.saving.serialize_keras_object(self._feature_extraction_layer),
+            "input_processing_layer": keras.saving.serialize_keras_object(self._input_processing_layer),
             "generative_layer": keras.saving.serialize_keras_object(self._generative_layer),
             "inference_layer": keras.saving.serialize_keras_object(self._inference_layer)
         }
@@ -67,12 +67,12 @@ class StandardVAE(VAE):
 
     @classmethod
     def from_config(cls, config, custom_objects=None):
-        feature_extraction_layer = keras.saving.deserialize_keras_object(config.pop("feature_extraction_layer"))
+        input_processing_layer = keras.saving.deserialize_keras_object(config.pop("input_processing_layer"))
         generative_layer = keras.saving.deserialize_keras_object(config.pop("generative_layer"))
         inference_layer = keras.saving.deserialize_keras_object(config.pop("inference_layer"))
         div_beta_scheduler = keras.saving.deserialize_keras_object(config.pop("div_beta_scheduler"))
         return cls(
-            feature_extraction_layer=feature_extraction_layer,
+            input_processing_layer=input_processing_layer,
             generative_layer=generative_layer,
             inference_layer=inference_layer,
             div_beta_scheduler=div_beta_scheduler,
