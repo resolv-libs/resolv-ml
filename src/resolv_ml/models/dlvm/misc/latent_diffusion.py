@@ -14,7 +14,7 @@ class LatentDiffusion(keras.Model):
                  **kwargs):
         super(LatentDiffusion, self).__init__(name=name, **kwargs)
         if isinstance(vae, str):
-            vae = keras.models.load_model(vae)
+            vae = keras.models.load_model(vae, compile=False)
         elif not isinstance(vae, VAE):
             raise ValueError(f"Invalid VAE type: {type(vae)}. Expected a VAE or a path to a saved VAE model.")
         self._vae = vae
