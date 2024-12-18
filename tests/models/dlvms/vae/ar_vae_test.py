@@ -16,7 +16,7 @@ from resolv_ml.models.dlvm.vae.ar_vae import AttributeRegularizedVAE
 from resolv_ml.utilities.bijectors import BatchNormalization, BoxCox
 from resolv_ml.utilities.regularizers.attribute import (DefaultAttributeRegularizer, SignAttributeRegularizer,
                                                         NormalizingFlowAttributeRegularizer, AttributeRegularizer)
-from resolv_ml.models.nn.seq2seq.rnn import encoders, decoders
+from resolv_ml.models.seq2seq.rnn import decoders, encoders
 from resolv_ml.utilities.schedulers import get_scheduler
 
 

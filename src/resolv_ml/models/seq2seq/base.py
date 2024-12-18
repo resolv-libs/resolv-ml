@@ -1,7 +1,7 @@
 # TODO - DOC
 import keras
 
-from ....utilities.schedulers import Scheduler
+from ...utilities.schedulers import Scheduler
 
 
 @keras.saving.register_keras_serializable(package="SequenceEncoders", name="SequenceEncoder")

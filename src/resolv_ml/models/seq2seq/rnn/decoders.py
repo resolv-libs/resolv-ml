@@ -7,7 +7,7 @@ from keras import ops as k_ops
 
 from . import layers as rnn_layers
 from ..base import SequenceDecoder
-from .....utilities.schedulers import Scheduler
+from ....utilities.schedulers import Scheduler
 
 
 @keras.saving.register_keras_serializable(package="SequenceDecoders", name="RNNAutoregressiveDecoder")

@@ -5,7 +5,7 @@ from pathlib import Path
 import keras
 from deepdiff import DeepDiff
 
-import resolv_ml.models.nn.seq2seq.rnn.decoders as rnn_decoders
+import resolv_ml.models.seq2seq.rnn.decoders as rnn_decoders
 
 
 class TestRNNAutoregressiveDecoder(unittest.TestCase):
