@@ -62,9 +62,12 @@ class DiffusionModel(keras.Model):
         else:
             # Input is a scalar that defines the number of samples (generation mode)
             n_samples = inputs[0]
-            z = keras.random.normal(shape=(n_samples, *self._z_shape))
+            z = self.get_latent_codes(n_samples)
             denoised_inputs, pred_noise = self.sample(z)
             return denoised_inputs, pred_noise, z
+
+    def get_latent_codes(self, n):
+        return keras.random.normal(shape=(n, *self._z_shape))
 
     def forward_diffusion(self, x, timestep: int):
         """

@@ -39,10 +39,10 @@ class DDIM(DiffusionModel):
         self._sampling_timesteps = sampling_timesteps
         self._timesteps_scheduler_type = timesteps_scheduler_type
 
-    def sample(self, noisy_input):
+    def sample(self, z):
         denoised_inputs = []
         predicted_noise = []
-        x_t = noisy_input
+        x_t = z
         ddim_timesteps = self._get_ddim_timesteps()
         for timestep, prev_timestep in ddim_timesteps:
             pred_noise = self.predict_noise(x_t, timestep=timestep, training=False)

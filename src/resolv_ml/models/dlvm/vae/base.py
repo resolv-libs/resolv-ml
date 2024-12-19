@@ -106,8 +106,8 @@ class VAE(keras.Model):
                                  evaluate=evaluate)
         return input_features, z, distributions[0], distributions[1]
 
-    def sample(self, num_samples, training: bool = False, evaluate: bool = False):
-        z = self._sampling_layer(num_samples,
+    def get_latent_codes(self, n, training: bool = False, evaluate: bool = False):
+        z = self._sampling_layer(n,
                                  prior=self._inference_layer.prior_distribution(training=training),
                                  training=training,
                                  evaluate=evaluate)

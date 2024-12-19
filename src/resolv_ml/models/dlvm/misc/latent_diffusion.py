@@ -46,6 +46,15 @@ class LatentDiffusion(keras.Model):
             )
             return output, pred_noise, z
 
+    def sample(self, inputs):
+        z_noisy, *decoder_inputs = inputs
+        z_denoised, pred_noise = self._diffusion.sample(z_noisy)
+        output = self._vae.decode(inputs=(z_denoised[:, -1, ...], *decoder_inputs))
+        return output, pred_noise, z_denoised
+
+    def get_latent_codes(self, n):
+        return self._diffusion.get_latent_codes(n)
+
     def evaluate(
             self,
             x=None,

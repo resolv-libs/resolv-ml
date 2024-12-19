@@ -103,6 +103,13 @@ class LatentDiffusionTest(unittest.TestCase):
             x=keras.ops.convert_to_tensor((num_sequences, self.config["sequence_length"],))
         )
         self.assertTrue(predicted_sequences.shape == (num_sequences, self.config["sequence_length"]))
+        logging.info("Testing model inference with custom latent codes...")
+        latent_codes = latent_diff_model.get_latent_codes(num_sequences).numpy()
+        latent_codes[:, 0] = keras.ops.linspace(start=-3, stop=3, num=num_sequences)
+        predicted_sequences, predicted_noise, latent_codes_denoised = latent_diff_model.sample(
+            inputs=(latent_codes, keras.ops.convert_to_tensor(self.config["sequence_length"]))
+        )
+        self.assertTrue(predicted_sequences.shape == (num_sequences, self.config["sequence_length"]))
 
     def test_seq2seq_latent_diff_model(self):
         latent_diff_model = self.get_latent_diffusion_model()

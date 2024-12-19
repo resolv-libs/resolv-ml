@@ -48,10 +48,10 @@ class DDPM(DiffusionModel):
         else:
             raise ValueError(f"Unknown posterior variance type: {posterior_variance_type}")
 
-    def sample(self, noisy_input):
+    def sample(self, z):
         denoised_inputs = []
         predicted_noise = []
-        x_t = noisy_input
+        x_t = z
         for timestep in range(self._timesteps - 1, -1, -1):
             pred_noise = self.predict_noise(x_t, timestep=timestep, training=False)
             x_t = self.denoise(x_t, pred_noise, timestep=timestep)

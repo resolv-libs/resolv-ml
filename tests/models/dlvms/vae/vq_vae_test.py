@@ -131,7 +131,7 @@ class Seq2SeqVQVAETest(unittest.TestCase):
         self.assertTrue(predicted_sequences.shape[-1] == self.config["sequence_length"])
         self.assertTrue(latent_codes.shape[-1] == self.config["z_size"])
         logging.info("Testing model sampling...")
-        latent_codes = loaded_model.sample(num_samples=keras.ops.convert_to_tensor(1000))
+        latent_codes = loaded_model.get_latent_codes(n=keras.ops.convert_to_tensor(1000))
         self.assertTrue(latent_codes.shape == (1000, self.config["z_size"]))
 
     def test_ar_seq2seq_vae_summary_and_plot(self):
