@@ -52,11 +52,12 @@ class DiffusionModel(keras.Model):
 
     def call(self, inputs, training: bool = False):
         if training or self._evaluation_mode:
-            x, x_label = inputs
-            # Monte Carlo sampling of timestep during training TODO - Antithetic sampling
+            x, x_labels = inputs
+            # Monte Carlo sampling of timestep during training
+            # TODO - Antithetic sampling
             timestep = np.random.randint(low=0, high=self._timesteps)
-            x_noisy, noise = self.forward_diffusion(x, x_label, timestep=timestep)
-            pred_noise = self.predict_noise(x_noisy, x_label=x_label, timestep=timestep, training=training)
+            x_noisy, noise = self.forward_diffusion(x, x_labels, timestep=timestep)
+            pred_noise = self.predict_noise(x_noisy, x_labels=x_labels, timestep=timestep, training=training)
             diffusion_loss = self._loss_fn(noise, pred_noise)
             self.add_loss(diffusion_loss)
             return noise, pred_noise, timestep, diffusion_loss
@@ -67,14 +68,18 @@ class DiffusionModel(keras.Model):
             denoised_inputs, pred_noise = self.sample(z)
             return denoised_inputs, pred_noise, z
 
-    def get_latent_codes(self, n):
-        return self.get_noise(n)
+    def get_latent_codes(self, n, labels=None):
+        return self.get_noise(n, x_labels=labels)
 
-    def get_noise(self, n: int, x=None, x_label=None):
-        return self._noise_fn(x, label=x_label, batch_size=n, z_shape=self._z_shape) if self._noise_fn \
-            else keras.random.normal(shape=(n, *self._z_shape) if x is None else (n, *x.shape[1:]))
+    def get_noise(self, n: int, x=None, x_labels=None):
+        return self._noise_fn(self, x=x, labels=x_labels, batch_size=n) if self._noise_fn \
+            else self.get_gaussian_noise(n, x)
 
-    def forward_diffusion(self, x, x_label, timestep: int):
+    def get_gaussian_noise(self, n: int, x=None):
+        n = keras.ops.convert_to_tensor(n)
+        return keras.random.normal(shape=(n, *self._z_shape) if x is None else (n, *x.shape[1:]))
+
+    def forward_diffusion(self, x, x_labels, timestep: int):
         assert 0 <= timestep < self._timesteps, f"Invalid timestep: {timestep}"
         batch_size, input_shape = x.shape[0], x.shape[1:]
         sqrt_alpha_cumprod = self._noise_scheduler.get_tensor("sqrt_alpha_cumprod", timestep, batch_size, input_shape)
@@ -82,15 +87,13 @@ class DiffusionModel(keras.Model):
             "sqrt_one_minus_alpha_cumprod", timestep, batch_size, input_shape
         )
         x = keras.ops.cast(x, dtype=sqrt_alpha_cumprod.dtype)
-        noise = self.get_noise(batch_size, x=x, x_label=x_label)
+        noise = self.get_noise(n=batch_size, x=x, x_labels=x_labels)
         noisy_inputs = sqrt_alpha_cumprod * x + sqrt_one_minus_alpha_cumprod * noise
         return noisy_inputs, noise
 
-    def predict_noise(self, x_noisy, timestep: int, x_label=None, training: bool = False):
-        # Build the conditioning signal for the denoising model - shape (batch_size, timesteps)
+    def predict_noise(self, x_noisy, timestep: int, x_labels=None, training: bool = False):
         denoiser_t_cond = self._get_denoiser_timestep_cond(x_noisy, timestep=timestep, training=training)
-        # Predict the noise. Shape: (batch_size, timesteps, *input_shape)
-        pred_noise = self._denoiser((x_noisy, x_label, denoiser_t_cond), training=training)
+        pred_noise = self._denoiser((x_noisy, x_labels, denoiser_t_cond), training=training)
         return pred_noise
 
     def evaluate(

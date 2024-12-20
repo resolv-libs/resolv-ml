@@ -41,6 +41,7 @@ class DDIMTest(unittest.TestCase):
         return input_seq_shape, aux_input_shape
 
     def get_ddim_model(self) -> DDIM:
+
         model = DDIM(
             z_shape=(self.config["z_size"], self.config["sequence_features"]),
             denoiser=DenseDenoiser(),
@@ -54,18 +55,20 @@ class DDIMTest(unittest.TestCase):
         return model
 
     def load_dataset(self, name: str) -> tf.data.TFRecordDataset:
-        def map_fn(_, seq):
-            empty_aux = tf.zeros(shape=(self.config["batch_size"], 1))
+
+        def map_fn(ctx, seq):
             input_seq = tf.transpose(seq["pitch_seq"])
+            attributes = tf.expand_dims(ctx["contour"], axis=-1)
             target = input_seq
-            return (input_seq, empty_aux), target
+            return (input_seq, attributes), target
 
         representation = PitchSequenceRepresentation(sequence_length=self.config["sequence_length"])
         tfrecord_loader = TFRecordLoader(
             file_pattern=f"{self.config['input_dir']}/data/4bars_melodies/{name}.tfrecord",
             parse_fn=functools.partial(
                 representation.parse_example,
-                parse_sequence_feature=True
+                parse_sequence_feature=True,
+                attributes_to_parse=["contour"]
             ),
             map_fn=map_fn,
             batch_size=self.config["batch_size"],

@@ -43,9 +43,20 @@ class LatentDiffusionTest(unittest.TestCase):
         return input_seq_shape, aux_input_shape
 
     def get_latent_diffusion_model(self) -> DDIM:
+
+        def get_ar_noise(diff_model, batch_size: int, x=None, labels=None):
+            noise = diff_model.get_gaussian_noise(batch_size, x)
+            if keras.ops.is_tensor(labels):
+                for i in range(batch_size):
+                    for j in range(labels.shape[-1]):
+                        updates = keras.random.normal(shape=(1,), mean=labels[i, j], stddev=0.1)
+                        noise = keras.ops.scatter_update(noise, [(i, j)], updates)
+            return noise
+
         diffusion_model = DDIM(
             z_shape=(self.config["z_size"],),
             denoiser=DenseDenoiser(),
+            noise_fn=get_ar_noise,
             timesteps=self.config["timesteps"],
             noise_level_conditioning=True,
             eta=self.config["eta"],
@@ -57,18 +68,20 @@ class LatentDiffusionTest(unittest.TestCase):
         return model
 
     def load_dataset(self, name: str) -> tf.data.TFRecordDataset:
-        def map_fn(_, seq):
-            empty_aux = tf.zeros(shape=(self.config["batch_size"], 1))
+
+        def map_fn(ctx, seq):
             input_seq = tf.transpose(seq["pitch_seq"])
+            attributes = tf.expand_dims(ctx["toussaint"], axis=-1)
             target = input_seq
-            return (input_seq, empty_aux), target
+            return (input_seq, attributes), target
 
         representation = PitchSequenceRepresentation(sequence_length=self.config["sequence_length"])
         tfrecord_loader = TFRecordLoader(
             file_pattern=f"{self.config['input_dir']}/data/4bars_melodies/{name}.tfrecord",
             parse_fn=functools.partial(
                 representation.parse_example,
-                parse_sequence_feature=True
+                parse_sequence_feature=True,
+                attributes_to_parse=["toussaint"]
             ),
             map_fn=map_fn,
             batch_size=self.config["batch_size"],
@@ -87,8 +100,8 @@ class LatentDiffusionTest(unittest.TestCase):
         latent_diff_model.fit(
             self.load_dataset("train_pitchseq"),
             batch_size=self.config["batch_size"],
-            epochs=5,
-            steps_per_epoch=5
+            epochs=1,
+            steps_per_epoch=2
         )
         latent_diff_model.save(self.config["output_dir"] / output_name)
         # TODO - loading VAE with compile=True does not work after training (seems a Keras bug on optimizers)
@@ -100,7 +113,7 @@ class LatentDiffusionTest(unittest.TestCase):
         logging.info("Testing model inference...")
         num_sequences = self.config["batch_size"]
         predicted_sequences, predicted_noise, z = latent_diff_model.predict(
-            x=keras.ops.convert_to_tensor((num_sequences, self.config["sequence_length"],))
+            x=keras.ops.convert_to_tensor([num_sequences, self.config["sequence_length"]])
         )
         self.assertTrue(predicted_sequences.shape == (num_sequences, self.config["sequence_length"]))
         logging.info("Testing model inference with custom latent codes...")

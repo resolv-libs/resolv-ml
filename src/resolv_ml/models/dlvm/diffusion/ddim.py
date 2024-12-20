@@ -1,5 +1,5 @@
 # TODO - DOC
-from typing import Any
+from typing import Any, Callable
 
 import keras
 
@@ -14,6 +14,7 @@ class DDIM(DiffusionModel):
                  denoiser: keras.Layer,
                  timesteps: int,
                  loss_fn: Any = "MeanSquaredError",
+                 noise_fn: Callable = None,
                  noise_schedule_type: str = "linear",
                  noise_schedule_start: float = 1e-4,
                  noise_schedule_end: float = 0.02,
@@ -28,6 +29,7 @@ class DDIM(DiffusionModel):
             denoiser=denoiser,
             timesteps=timesteps,
             loss_fn=loss_fn,
+            noise_fn=noise_fn,
             noise_schedule_type=noise_schedule_type,
             noise_schedule_start=noise_schedule_start,
             noise_schedule_end=noise_schedule_end,

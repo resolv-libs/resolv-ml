@@ -48,6 +48,7 @@ class DDPMTest(unittest.TestCase):
         return model
 
     def load_dataset(self, name: str) -> tf.data.TFRecordDataset:
+
         def map_fn(_, seq):
             empty_aux = tf.zeros(shape=(self.config["batch_size"], 1))
             input_seq = tf.transpose(seq["pitch_seq"])
@@ -59,7 +60,8 @@ class DDPMTest(unittest.TestCase):
             file_pattern=f"{self.config['input_dir']}/data/4bars_melodies/{name}.tfrecord",
             parse_fn=functools.partial(
                 representation.parse_example,
-                parse_sequence_feature=True
+                parse_sequence_feature=True,
+                attributes_to_parse=["contour"]
             ),
             map_fn=map_fn,
             batch_size=self.config["batch_size"],
