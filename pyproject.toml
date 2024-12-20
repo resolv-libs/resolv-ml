@@ -44,6 +44,8 @@ tensorflow-probability = { version = "^0.24.0", extras = ["tf"] }
 matplotlib = "*"
 deepdiff = "*"
 resolv-pipelines = {git = "ssh://git@github.com/resolv-libs/resolv-pipelines.git", rev = "main", extras = ["tensorflow"]}
+tensorflow = "2.17.1"
+tensorflow-metal = ">= 1.1.0"
 
 [tool.poetry.group.docs.dependencies]
 

@@ -26,6 +26,7 @@ class VAE(keras.Model):
         self._aux_input_processing_layer = aux_input_processing_layer
         self._regularizers = regularizers
         self._evaluation_mode = False
+        self._call_symbolic_build = False
 
     def get_latent_space_shape(self):
         raise NotImplementedError("Subclasses must implement the get_latent_space_shape method.")
@@ -56,17 +57,18 @@ class VAE(keras.Model):
                 layer.build(generative_in_shape)
 
     def call(self, inputs, training: bool = False):
-        if training or self._evaluation_mode:
+        evaluate = self._evaluation_mode or self._call_symbolic_build
+        if training or evaluate:
             vae_input, aux_input = inputs
             processed_aux_input = self._aux_input_processing_layer(aux_input, training=training) \
                 if self._aux_input_processing_layer else aux_input
             current_step = self.optimizer.iterations + 1
             input_features, z, posterior_dist, prior_dist = self.encode(inputs=(vae_input, processed_aux_input),
                                                                         training=training,
-                                                                        evaluate=self._evaluation_mode)
+                                                                        evaluate=evaluate)
             outputs = self.decode(inputs=(vae_input, processed_aux_input, z),
                                   training=training,
-                                  evaluate=self._evaluation_mode,
+                                  evaluate=evaluate,
                                   current_step=current_step)
             if self._regularizers:
                 for regularizer_id, regularizer in self._regularizers.items():
@@ -75,7 +77,7 @@ class VAE(keras.Model):
                                            prior=prior_dist,
                                            posterior=posterior_dist,
                                            training=training,
-                                           evaluate=self._evaluation_mode,
+                                           evaluate=evaluate,
                                            current_step=current_step)
                     self.add_loss(reg_loss)
             return outputs
@@ -103,7 +105,8 @@ class VAE(keras.Model):
                                  prior=distributions[1],
                                  posterior=distributions[0],
                                  training=training,
-                                 evaluate=evaluate)
+                                 evaluate=evaluate,
+                                 symbolic_build=self._call_symbolic_build)
         return input_features, z, distributions[0], distributions[1]
 
     def get_latent_codes(self, n, training: bool = False, evaluate: bool = False):
@@ -113,13 +116,13 @@ class VAE(keras.Model):
                                  evaluate=evaluate)
         return z
 
-    def decode(self, inputs, current_step=None, training: bool = False, evaluate: bool = False):
+    def decode(self, inputs, current_step=1, training: bool = False, evaluate: bool = False):
         if training or evaluate:
             vae_input, aux_input, z = inputs
             return self._generative_layer(inputs=(vae_input, aux_input, z),
                                           training=training,
-                                          current_step=keras.ops.convert_to_tensor(current_step or 1),
-                                          evaluate=keras.ops.convert_to_tensor(evaluate))
+                                          current_step=keras.ops.convert_to_tensor(current_step),
+                                          evaluate=evaluate)
         else:
             return self._generative_layer(inputs=inputs, training=training)
 
@@ -162,6 +165,11 @@ class VAE(keras.Model):
     ):
         graph = self.build_graph(input_shape)
         graph.summary(line_length, positions, print_fn, expand_nested, show_trainable, layer_range)
+
+    def _symbolic_build(self, iterator=None, data_batch=None):
+        self._call_symbolic_build = True
+        super()._symbolic_build(data_batch=data_batch)
+        self._call_symbolic_build = False
 
     def build_graph(self, input_shape):
         seq_input_shape, aux_input_shape = input_shape

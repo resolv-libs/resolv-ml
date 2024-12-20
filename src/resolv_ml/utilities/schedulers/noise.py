@@ -10,7 +10,7 @@ def get_noise_schedule(timesteps: int = 1000,
                        noise_schedule_start: float = 1e-4,
                        noise_schedule_end: float = 0.02):
     if noise_schedule_type == "linear":
-        beta = keras.ops.linspace(noise_schedule_start, noise_schedule_end, timesteps)
+        beta = keras.ops.linspace(start=noise_schedule_start, stop=noise_schedule_end, num=timesteps)
     elif noise_schedule_type == "cosine":
         # TODO - Noise schedulers
         beta = 0

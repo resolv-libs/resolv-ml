@@ -15,9 +15,10 @@ from resolv_ml.models.seq2seq.rnn import decoders, encoders
 from resolv_ml.training.callbacks import LearningRateLoggerCallback
 from resolv_ml.training.trainer import Trainer
 from resolv_ml.utilities.schedulers import get_scheduler
+from training import utils
 
 
-class TestTrainer(unittest.TestCase):
+class TestVAETrainer(unittest.TestCase):
 
     @property
     def input_dir(self):
@@ -30,12 +31,6 @@ class TestTrainer(unittest.TestCase):
     def setUp(self):
         os.environ["KERAS_BACKEND"] = "tensorflow"
         self.output_dir.mkdir(parents=True, exist_ok=True)
-
-    def check_tf_gpu_availability(self):
-        gpu_list = tf.config.list_physical_devices('GPU')
-        if len(gpu_list) > 0:
-            logging.info(f'Num GPUs Available: {len(gpu_list)}. List: {gpu_list}')
-        return gpu_list
 
     def get_input_shape(self):
         input_seq_shape = 32, 64, 1
@@ -140,8 +135,7 @@ class TestTrainer(unittest.TestCase):
         return tfrecord_loader.load_dataset()
 
     def test_trainer(self):
-        self.check_tf_gpu_availability()
-        strategy = tf.distribute.get_strategy()
+        strategy = utils.get_distributed_strategy(0, True)
         with strategy.scope():
             vae_model = self.get_hierarchical_model()
             trainer = Trainer(
@@ -152,7 +146,8 @@ class TestTrainer(unittest.TestCase):
                 metrics=[
                     losses.SparseCategoricalCrossentropy(from_logits=True),
                     metrics.SparseCategoricalAccuracy(),
-                    metrics.SparseTopKCategoricalAccuracy()
+                    keras.metrics.SparseTopKCategoricalAccuracy(k=3, name="sparse_top_3_categorical_accuracy"),
+                    keras.metrics.SparseTopKCategoricalAccuracy(k=5, name="sparse_top_5_categorical_accuracy")
                 ],
                 lr_schedule=keras.optimizers.schedules.ExponentialDecay(
                     **trainer.config["compile"]["optimizer"]["config"]["learning_rate"]
@@ -178,7 +173,7 @@ class TestTrainer(unittest.TestCase):
         self.assertTrue(predicted_sequences.shape[-1] == 64)
         self.assertTrue(latent_codes.shape[-1] == 128)
         logging.info("Testing model sampling...")
-        latent_codes = loaded_model.sample(num_samples=keras.ops.convert_to_tensor(1000))
+        latent_codes = loaded_model.get_latent_codes(n=keras.ops.convert_to_tensor(1000))
         self.assertTrue(latent_codes.shape == (1000, 128))
 
 

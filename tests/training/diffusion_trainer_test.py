@@ -14,9 +14,10 @@ from resolv_ml.models.dlvm.misc.latent_diffusion import LatentDiffusion
 from resolv_ml.models.nn.denoisers import DenseDenoiser
 from resolv_ml.training.callbacks import LearningRateLoggerCallback
 from resolv_ml.training.trainer import Trainer
+from training import utils
 
 
-class TestTrainer(unittest.TestCase):
+class TestDiffusionTrainer(unittest.TestCase):
 
     @property
     def input_dir(self):
@@ -29,12 +30,6 @@ class TestTrainer(unittest.TestCase):
     def setUp(self):
         os.environ["KERAS_BACKEND"] = "tensorflow"
         self.output_dir.mkdir(parents=True, exist_ok=True)
-
-    def check_tf_gpu_availability(self):
-        gpu_list = tf.config.list_physical_devices('GPU')
-        if len(gpu_list) > 0:
-            logging.info(f'Num GPUs Available: {len(gpu_list)}. List: {gpu_list}')
-        return gpu_list
 
     def get_input_shape(self):
         input_seq_shape = 32, 64, 1
@@ -81,8 +76,7 @@ class TestTrainer(unittest.TestCase):
         return tfrecord_loader.load_dataset()
 
     def test_trainer(self):
-        self.check_tf_gpu_availability()
-        strategy = tf.distribute.get_strategy()
+        strategy = utils.get_distributed_strategy(0, True)
         with strategy.scope():
             diffusion_model = self.get_diffusion_model()
             trainer = Trainer(
