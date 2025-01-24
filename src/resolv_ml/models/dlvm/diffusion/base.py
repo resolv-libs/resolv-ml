@@ -92,8 +92,10 @@ class DiffusionModel(keras.Model):
         return noisy_inputs, noise
 
     def predict_noise(self, x_noisy, timestep: int, x_labels=None, training: bool = False):
-        denoiser_t_cond = self._get_denoiser_timestep_cond(x_noisy, timestep=timestep, training=training)
-        pred_noise = self._denoiser((x_noisy, x_labels, denoiser_t_cond), training=training)
+        denoiser_cond = self._get_denoiser_conditioning(
+            x_noisy, timestep=timestep, x_labels=x_labels, training=training
+        )
+        pred_noise = self._denoiser((x_noisy, x_labels, denoiser_cond), training=training)
         return pred_noise
 
     def evaluate(
@@ -123,19 +125,23 @@ class DiffusionModel(keras.Model):
         self._evaluation_mode = False
         return eval_output
 
-    def _get_denoiser_timestep_cond(self, noisy_input, timestep: int, training: bool = False):
+    def _get_denoiser_conditioning(self, noisy_input, timestep: int, x_labels=None, training: bool = False):
         batch_size = noisy_input.shape[0]
-        denoiser_cond = timestep
+        denoiser_t_cond = timestep
         if self._noise_level_conditioning:
             sqrt_alpha_cumprod = self._noise_scheduler.get_tensor("sqrt_alpha_cumprod", timestep=timestep)
-            denoiser_cond = sqrt_alpha_cumprod
+            denoiser_t_cond = sqrt_alpha_cumprod
             if training:
                 prev_timestep = timestep - 1
                 sqrt_alpha_cumprod_prev = self._noise_scheduler.get_tensor("sqrt_alpha_cumprod", timestep=prev_timestep)
-                denoiser_cond = keras.random.uniform(
-                    shape=(), minval=sqrt_alpha_cumprod_prev, maxval=sqrt_alpha_cumprod
+                denoiser_t_cond = keras.random.uniform(
+                    shape=(1,), minval=sqrt_alpha_cumprod_prev, maxval=sqrt_alpha_cumprod
                 )
-        denoiser_cond = batch_tensor(denoiser_cond, batch_size)
+            else:
+                denoiser_t_cond = keras.ops.expand_dims(denoiser_t_cond, axis=-1)
+        denoiser_t_cond = batch_tensor(denoiser_t_cond, batch_size)
+        denoiser_cond = keras.ops.concatenate([denoiser_t_cond, x_labels], axis=-1) if x_labels is not None \
+            else denoiser_t_cond
         return denoiser_cond
 
     def get_config(self):

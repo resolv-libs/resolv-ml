@@ -23,6 +23,9 @@ class DenseDenoiser(keras.Layer):
     :type units: int
     :ivar num_layers: Number of residual layers in the denoiser.
     :type num_layers: int
+    :ivar conditioning_merge_mode: The mode in which conditioning signals are merged. Applied only if the denoiser in
+     conditioned by more than one signal. Accepted values: sum, prod and concat.
+    :type conditioning_merge_mode: str
     """
 
     @keras.saving.register_keras_serializable(package="Denoisers", name="DenseProjectionBlock")
@@ -63,12 +66,16 @@ class DenseDenoiser(keras.Layer):
                  units: int = 2048,
                  num_layers: int = 3,
                  positional_encoding_layer: keras.Layer = SinusoidalPositionalEncoding(embedding_dim=128),
+                 conditioning_merge_mode: str = 'sum',
                  name="denoiser",
                  **kwargs):
         super(DenseDenoiser, self).__init__(name=name, **kwargs)
+        if conditioning_merge_mode not in ['sum', 'prod', 'concat']:
+            raise ValueError("Invalid conditioning merge mode.")
         self.positional_encoding_layer = positional_encoding_layer
         self.units = units
         self.num_layers = num_layers
+        self.conditioning_merge_mode = conditioning_merge_mode
 
     def build(self, input_shape):
         super().build(input_shape)
@@ -78,7 +85,6 @@ class DenseDenoiser(keras.Layer):
         self._cond_layers = [
             self.positional_encoding_layer,
             keras.layers.Dense(dense_units, activation='silu'),
-            keras.layers.Dense(dense_units),
             FiLM(gamma_layer=keras.layers.Dense(self.units), beta_layer=keras.layers.Dense(self.units))
         ]
         self._input_layers = [keras.layers.Dense(self.units)]
@@ -104,17 +110,32 @@ class DenseDenoiser(keras.Layer):
         return x
 
     def _get_film_from_conditioning(self, conditioning):
-        output = conditioning
-        for layer in self._cond_layers:
-            output = layer(output)
-        return output
+        scale_params = []
+        shift_params = []
+        for i in range(conditioning.shape[-1]):
+            output = conditioning[:, i]
+            for layer in self._cond_layers:
+                output = layer(output)
+            scale, shift = output
+            scale_params.append(scale)
+            shift_params.append(shift)
+        stacked_scale_params = keras.ops.stack(scale_params, axis=0)
+        stacked_shift_params = keras.ops.stack(shift_params, axis=0)
+        match self.conditioning_merge_mode:
+            case "sum":
+                return keras.ops.sum(stacked_scale_params, axis=0), keras.ops.sum(stacked_shift_params, axis=0)
+            case "prod":
+                return keras.ops.sum(stacked_scale_params, axis=0), keras.ops.sum(stacked_shift_params, axis=0)
+            case _:
+                return keras.ops.concatenate(scale_params, axis=-1), keras.ops.concatenate(shift_params, axis=-1)
 
     def get_config(self):
         base_config = super().get_config()
         config = {
             "positional_encoding_layer": keras.saving.serialize_keras_object(self.positional_encoding_layer),
             "units": self.units,
-            "num_layers": self.num_layers
+            "num_layers": self.num_layers,
+            "conditioning_merge_mode": self.conditioning_merge_mode
         }
         return {**base_config, **config}
 
