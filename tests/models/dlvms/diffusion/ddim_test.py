@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 import keras
+import numpy as np
 import tensorflow as tf
 from deepdiff import DeepDiff
 from resolv_pipelines.data.loaders import TFRecordLoader
@@ -99,7 +100,10 @@ class DDIMTest(unittest.TestCase):
         self.assertTrue(not diff)
         logging.info("Testing model inference...")
         num_sequences = self.config["batch_size"]
-        predicted_sequences, predicted_noise, z = ddim_model.predict(x=keras.ops.convert_to_tensor((num_sequences,)))
+        labels = keras.ops.expand_dims(keras.ops.linspace(0, 10, num_sequences), axis=-1)
+        predicted_sequences, predicted_noise, z = ddim_model.predict(
+            x=(keras.ops.full((num_sequences,), num_sequences, dtype="int32"), labels)
+        )
         self.assertTrue(predicted_sequences.shape == (num_sequences, self.config["sampling_timesteps"],
                                                       self.config["sequence_length"], self.config["sequence_features"]))
 

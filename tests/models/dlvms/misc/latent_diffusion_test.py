@@ -112,13 +112,14 @@ class LatentDiffusionTest(unittest.TestCase):
         self.assertTrue(not diff)
         logging.info("Testing model inference...")
         num_sequences = self.config["batch_size"]
+        labels = keras.ops.expand_dims(keras.ops.linspace(0, 10, num_sequences), axis=-1)
+        decoder_inputs = keras.ops.full((num_sequences,), self.config["sequence_length"], dtype="int32")
         predicted_sequences, predicted_noise, z = latent_diff_model.predict(
-            x=keras.ops.convert_to_tensor([num_sequences, self.config["sequence_length"]])
+            x=(keras.ops.full((num_sequences,), num_sequences, dtype="int32"), labels, decoder_inputs),
         )
         self.assertTrue(predicted_sequences.shape == (num_sequences, self.config["sequence_length"]))
         logging.info("Testing model inference with custom latent codes...")
         latent_codes = latent_diff_model.get_latent_codes(num_sequences).numpy()
-        latent_codes[:, 0] = keras.ops.linspace(start=-3, stop=3, num=num_sequences)
         predicted_sequences, predicted_noise, latent_codes_denoised = latent_diff_model.sample(
             inputs=(latent_codes, keras.ops.convert_to_tensor(self.config["sequence_length"]))
         )

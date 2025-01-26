@@ -39,8 +39,12 @@ class LatentDiffusion(keras.Model):
             self._diff_loss_tracker.update_state(loss)
             return noise, pred_noise, timestep
         else:
-            n_samples, *decoder_inputs = inputs
-            z, pred_noise, _ = self._diffusion((n_samples,), training=training)
+            if len(inputs) < 3:
+                n_samples, *decoder_inputs = inputs
+                z_labels = None
+            else:
+                n_samples, z_labels, *decoder_inputs = inputs
+            z, pred_noise, _ = self._diffusion((n_samples, z_labels), training=training)
             output = self._vae.decode(
                 inputs=(z[:, -1, ...], *decoder_inputs), training=training, evaluate=self._evaluation_mode
             )

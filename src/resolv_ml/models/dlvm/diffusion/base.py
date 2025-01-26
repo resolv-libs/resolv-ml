@@ -39,7 +39,7 @@ class DiffusionModel(keras.Model):
         )
         self._evaluation_mode = False
 
-    def sample(self, z):
+    def sample(self, z, z_labels=None):
         raise NotImplementedError("Subclasses must implement the sample method.")
 
     def build(self, input_shape):
@@ -62,10 +62,11 @@ class DiffusionModel(keras.Model):
             self.add_loss(diffusion_loss)
             return noise, pred_noise, timestep, diffusion_loss
         else:
-            # Input is a scalar that defines the number of samples (generation mode)
-            n_samples = inputs[0]
+            # First input is a scalar that defines the number of samples (generation mode)
+            # Second input are the conditioning labels
+            n_samples, z_labels = (inputs[0][1], inputs[1]) if len(inputs) == 2 else (inputs[0], None)
             z = self.get_noise(n_samples)
-            denoised_inputs, pred_noise = self.sample(z)
+            denoised_inputs, pred_noise = self.sample(z, z_labels)
             return denoised_inputs, pred_noise, z
 
     def get_latent_codes(self, n, labels=None):
