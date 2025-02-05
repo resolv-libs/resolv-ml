@@ -14,6 +14,8 @@ from resolv_ml.models.dlvm.misc.latent_diffusion import LatentDiffusion
 from resolv_ml.models.nn.denoisers import DenseDenoiser
 from resolv_ml.training.callbacks import LearningRateLoggerCallback
 from resolv_ml.training.trainer import Trainer
+from resolv_ml.utilities.schedulers import ConstantScheduler
+
 from training import utils
 
 
@@ -43,7 +45,9 @@ class TestDiffusionTrainer(unittest.TestCase):
             timesteps=1000,
             noise_level_conditioning=True,
             eta=0,
-            sampling_timesteps=100
+            sampling_timesteps=100,
+            cfg_uncond_probability_scheduler=ConstantScheduler(0.2),
+            cfg_weight=3.0
         )
         model = LatentDiffusion(
             vae="./output/models/dlvm/vae/ar-vae/seq2seq/ar_pt_reg_trained.keras",

@@ -4,8 +4,9 @@ from typing import Tuple, Any, Callable
 import keras
 import numpy as np
 
+from ....utilities.schedulers import Scheduler
 from ....utilities.schedulers.noise import NoiseScheduler
-from resolv_ml.utilities.ops import batch_tensor
+from ....utilities.ops import batch_tensor
 
 
 class DiffusionModel(keras.Model):
@@ -20,6 +21,8 @@ class DiffusionModel(keras.Model):
                  noise_schedule_start: float = 1e-4,
                  noise_schedule_end: float = 0.02,
                  noise_level_conditioning: bool = False,
+                 cfg_uncond_probability_scheduler: Scheduler = None,
+                 cfg_weight: float = None,
                  name: str = "diffusion",
                  **kwargs):
         super(DiffusionModel, self).__init__(name=name, **kwargs)
@@ -32,12 +35,15 @@ class DiffusionModel(keras.Model):
         self._noise_schedule_start = noise_schedule_start
         self._noise_schedule_end = noise_schedule_end
         self._noise_level_conditioning = noise_level_conditioning
+        self._cfg_uncond_probability_scheduler = cfg_uncond_probability_scheduler
+        self._cfg_weight = cfg_weight
         self._noise_scheduler = NoiseScheduler(
             noise_schedule_type=noise_schedule_type,
             noise_schedule_start=noise_schedule_start,
             noise_schedule_end=noise_schedule_end
         )
         self._evaluation_mode = False
+        self._call_symbolic_build = False
 
     def sample(self, z, z_labels=None):
         raise NotImplementedError("Subclasses must implement the sample method.")
@@ -50,12 +56,16 @@ class DiffusionModel(keras.Model):
         if not self._denoiser.built:
             self._denoiser.build((diffusion_input_shape, conditioning_input_shape))
 
-    def call(self, inputs, training: bool = False):
-        if training or self._evaluation_mode:
+    def call(self, inputs, current_step=None, training: bool = False):
+        evaluate = self._evaluation_mode or self._call_symbolic_build
+        if training or evaluate:
             x, x_labels = inputs
             # Monte Carlo sampling of timestep during training
-            # TODO - Antithetic sampling
             timestep = np.random.randint(low=0, high=self._timesteps)
+            if self._cfg_uncond_probability_scheduler is not None:
+                current_step = current_step if current_step else self.optimizer.iterations + 1
+                cfg_uncond_probability = self._cfg_uncond_probability_scheduler(step=current_step)
+                x_labels = x_labels if keras.random.uniform(shape=()) >= cfg_uncond_probability else None
             x_noisy, noise = self.forward_diffusion(x, x_labels, timestep=timestep)
             pred_noise = self.predict_noise(x_noisy, x_labels=x_labels, timestep=timestep, training=training)
             diffusion_loss = self._loss_fn(noise, pred_noise)
@@ -97,6 +107,9 @@ class DiffusionModel(keras.Model):
             x_noisy, timestep=timestep, x_labels=x_labels, training=training
         )
         pred_noise = self._denoiser((x_noisy, x_labels, denoiser_cond), training=training)
+        if self._cfg_weight:
+            uncond_pred_noise = self._denoiser((x_noisy, None, denoiser_cond), training=training)
+            pred_noise = (1 + self._cfg_weight) * pred_noise - self._cfg_weight * uncond_pred_noise
         return pred_noise
 
     def evaluate(
@@ -125,6 +138,11 @@ class DiffusionModel(keras.Model):
         )
         self._evaluation_mode = False
         return eval_output
+
+    def _symbolic_build(self, iterator=None, data_batch=None):
+        self._call_symbolic_build = True
+        super()._symbolic_build(data_batch=data_batch)
+        self._call_symbolic_build = False
 
     def _get_denoiser_conditioning(self, noisy_input, timestep: int, x_labels=None, training: bool = False):
         batch_size = noisy_input.shape[0]
@@ -155,7 +173,11 @@ class DiffusionModel(keras.Model):
             "noise_schedule_type": self._noise_schedule_type,
             "noise_schedule_start": self._noise_schedule_start,
             "noise_schedule_end": self._noise_schedule_end,
-            "noise_level_conditioning": self._noise_level_conditioning
+            "noise_level_conditioning": self._noise_level_conditioning,
+            "cfg_uncond_probability_scheduler": keras.saving.serialize_keras_object(
+                self._cfg_uncond_probability_scheduler
+            ),
+            "cfg_weight": self._cfg_weight
         }
         return {**base_config, **config}
 
@@ -163,8 +185,12 @@ class DiffusionModel(keras.Model):
     def from_config(cls, config, custom_objects=None):
         denoiser = keras.saving.deserialize_keras_object(config.pop("denoiser"))
         loss_fn = keras.saving.deserialize_keras_object(config.pop("loss_fn"))
+        cfg_uncond_probability_scheduler = keras.saving.deserialize_keras_object(
+            config.pop("cfg_uncond_probability_scheduler")
+        )
         return cls(
             denoiser=denoiser,
             loss_fn=loss_fn,
+            cfg_uncond_probability_scheduler=cfg_uncond_probability_scheduler,
             **config
         )

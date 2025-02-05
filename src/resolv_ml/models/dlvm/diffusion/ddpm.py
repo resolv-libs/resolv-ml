@@ -4,6 +4,7 @@ from typing import Any, Callable
 import keras
 
 from .base import DiffusionModel
+from ....utilities.schedulers import Scheduler
 
 
 @keras.saving.register_keras_serializable(package="Diffusion", name="DDPM")
@@ -20,6 +21,8 @@ class DDPM(DiffusionModel):
                  noise_schedule_end: float = 0.02,
                  noise_level_conditioning: bool = False,
                  posterior_variance_type: str = "lower_bound",
+                 cfg_uncond_probability_scheduler: Scheduler = None,
+                 cfg_weight: float = None,
                  name: str = "ddpm",
                  **kwargs):
         super(DDPM, self).__init__(
@@ -32,6 +35,8 @@ class DDPM(DiffusionModel):
             noise_schedule_start=noise_schedule_start,
             noise_schedule_end=noise_schedule_end,
             noise_level_conditioning=noise_level_conditioning,
+            cfg_uncond_probability_scheduler=cfg_uncond_probability_scheduler,
+            cfg_weight=cfg_weight,
             name=name,
             **kwargs
         )
@@ -90,8 +95,12 @@ class DDPM(DiffusionModel):
     def from_config(cls, config, custom_objects=None):
         denoiser = keras.saving.deserialize_keras_object(config.pop("denoiser"))
         loss_fn = keras.saving.deserialize_keras_object(config.pop("loss_fn"))
+        cfg_uncond_probability_scheduler = keras.saving.deserialize_keras_object(
+            config.pop("cfg_uncond_probability_scheduler")
+        )
         return cls(
             denoiser=denoiser,
             loss_fn=loss_fn,
+            cfg_uncond_probability_scheduler=cfg_uncond_probability_scheduler,
             **config
         )

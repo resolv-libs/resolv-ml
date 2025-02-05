@@ -4,6 +4,7 @@ from typing import Any, Callable
 import keras
 
 from .base import DiffusionModel
+from ....utilities.schedulers import Scheduler
 
 
 @keras.saving.register_keras_serializable(package="Diffusion", name="DDIM")
@@ -22,6 +23,8 @@ class DDIM(DiffusionModel):
                  eta: float = 0.,
                  sampling_timesteps: int = 100,
                  timesteps_scheduler_type: str = 'uniform',
+                 cfg_uncond_probability_scheduler: Scheduler = None,
+                 cfg_weight: float = None,
                  name: str = "ddim",
                  **kwargs):
         super(DDIM, self).__init__(
@@ -34,6 +37,8 @@ class DDIM(DiffusionModel):
             noise_schedule_start=noise_schedule_start,
             noise_schedule_end=noise_schedule_end,
             noise_level_conditioning=noise_level_conditioning,
+            cfg_uncond_probability_scheduler=cfg_uncond_probability_scheduler,
+            cfg_weight=cfg_weight,
             name=name,
             **kwargs
         )
@@ -115,3 +120,17 @@ class DDIM(DiffusionModel):
             "timesteps_scheduler_type": self._timesteps_scheduler_type
         }
         return {**base_config, **config}
+
+    @classmethod
+    def from_config(cls, config, custom_objects=None):
+        denoiser = keras.saving.deserialize_keras_object(config.pop("denoiser"))
+        loss_fn = keras.saving.deserialize_keras_object(config.pop("loss_fn"))
+        cfg_uncond_probability_scheduler = keras.saving.deserialize_keras_object(
+            config.pop("cfg_uncond_probability_scheduler")
+        )
+        return cls(
+            denoiser=denoiser,
+            loss_fn=loss_fn,
+            cfg_uncond_probability_scheduler=cfg_uncond_probability_scheduler,
+            **config
+        )

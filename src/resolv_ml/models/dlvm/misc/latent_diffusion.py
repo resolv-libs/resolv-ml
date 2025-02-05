@@ -35,7 +35,10 @@ class LatentDiffusion(keras.Model):
         if training or self._evaluation_mode:
             vae_input, cond_input = inputs
             _, z, _, _ = self._vae.encode((vae_input, cond_input), training=training, evaluate=self._evaluation_mode)
-            noise, pred_noise, timestep, loss = self._diffusion((z, cond_input), training=training)
+            current_step = keras.ops.convert_to_tensor(self.optimizer.iterations + 1),
+            noise, pred_noise, timestep, loss = self._diffusion(
+                (z, cond_input), current_step=current_step, training=training
+            )
             self._diff_loss_tracker.update_state(loss)
             return noise, pred_noise, timestep
         else:

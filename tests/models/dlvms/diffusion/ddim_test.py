@@ -5,7 +5,6 @@ import unittest
 from pathlib import Path
 
 import keras
-import numpy as np
 import tensorflow as tf
 from deepdiff import DeepDiff
 from resolv_pipelines.data.loaders import TFRecordLoader
@@ -13,6 +12,7 @@ from resolv_pipelines.data.representation.mir import PitchSequenceRepresentation
 
 from resolv_ml.models.dlvm.diffusion.ddim import DDIM
 from resolv_ml.models.nn.denoisers import DenseDenoiser
+from resolv_ml.utilities.schedulers import ConstantScheduler
 
 
 class DDIMTest(unittest.TestCase):
@@ -29,7 +29,9 @@ class DDIMTest(unittest.TestCase):
             "timesteps": 1000,
             "eta": 5.,
             "sampling_timesteps": 10,
-            "timesteps_scheduler_type": "uniform"
+            "timesteps_scheduler_type": "uniform",
+            "cfg_uncond_probability_scheduler": ConstantScheduler(0.2),
+            "cfg_weight": 3.0
         }
 
     def setUp(self):
@@ -51,6 +53,8 @@ class DDIMTest(unittest.TestCase):
             eta=self.config["eta"],
             sampling_timesteps=self.config["sampling_timesteps"],
             timesteps_scheduler_type=self.config["timesteps_scheduler_type"],
+            cfg_uncond_probability_scheduler=self.config["cfg_uncond_probability_scheduler"],
+            cfg_weight=self.config["cfg_weight"]
         )
         model.build(self.get_input_shape())
         return model
