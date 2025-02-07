@@ -16,9 +16,10 @@ class DenseDenoiser(keras.Layer):
     and FiLM conditioning. It includes residual connections capable of processing features through multiple
     dense projection layers, applying learned transformations to inputs.
 
-    :ivar positional_encoding_layer: Layer used for applying sinusoidal or other positional encodings
-        to the input.
-    :type positional_encoding_layer: keras.Layer
+    :ivar timestep_encoding_layer: Layer used for applying sinusoidal or other positional encodings to the timestep.
+    :type timestep_encoding_layer: keras.Layer
+    :ivar labels_encoding_layer: Layer used for applying sinusoidal or other positional encodings to the labels.
+    :type labels_encoding_layer: keras.Layer
     :ivar units: Number of units in each dense layer within the denoising block.
     :type units: int
     :ivar num_layers: Number of residual layers in the denoiser.
@@ -65,14 +66,16 @@ class DenseDenoiser(keras.Layer):
     def __init__(self,
                  units: int = 2048,
                  num_layers: int = 3,
-                 positional_encoding_layer: keras.Layer = SinusoidalPositionalEncoding(embedding_dim=128),
+                 timestep_encoding_layer: keras.Layer = SinusoidalPositionalEncoding(embedding_dim=128),
+                 labels_encoding_layer: keras.Layer = SinusoidalPositionalEncoding(embedding_dim=128),
                  conditioning_merge_mode: str = 'sum',
                  name="denoiser",
                  **kwargs):
         super(DenseDenoiser, self).__init__(name=name, **kwargs)
         if conditioning_merge_mode not in ['sum', 'prod', 'concat']:
             raise ValueError("Invalid conditioning merge mode.")
-        self.positional_encoding_layer = positional_encoding_layer
+        self.timestep_encoding_layer = timestep_encoding_layer
+        self.labels_encoding_layer = labels_encoding_layer
         self.units = units
         self.num_layers = num_layers
         self.conditioning_merge_mode = conditioning_merge_mode
@@ -80,11 +83,18 @@ class DenseDenoiser(keras.Layer):
     def build(self, input_shape):
         super().build(input_shape)
         x_shape, conditioning_shape = input_shape
-        _, embedding_channels = self.positional_encoding_layer.compute_output_shape(conditioning_shape)
-        dense_units = embedding_channels * 4
-        self._cond_layers = [
-            self.positional_encoding_layer,
-            keras.layers.Dense(dense_units, activation='silu'),
+        _, timestep_emb_channels = self.timestep_encoding_layer.compute_output_shape(conditioning_shape)
+        timestep_dense_units = timestep_emb_channels * 4
+        self._timestep_cond_layers = [
+            self.timestep_encoding_layer,
+            keras.layers.Dense(timestep_dense_units, activation='silu'),
+            FiLM(gamma_layer=keras.layers.Dense(self.units), beta_layer=keras.layers.Dense(self.units))
+        ]
+        _, labels_emb_channels = self.labels_encoding_layer.compute_output_shape(conditioning_shape)
+        labels_dense_units = labels_emb_channels * 4
+        self._labels_cond_layers = [
+            self.labels_encoding_layer,
+            keras.layers.Dense(labels_dense_units, activation='silu'),
             FiLM(gamma_layer=keras.layers.Dense(self.units), beta_layer=keras.layers.Dense(self.units))
         ]
         self._input_layers = [keras.layers.Dense(self.units)]
@@ -96,11 +106,13 @@ class DenseDenoiser(keras.Layer):
         ]
         self._output_layers = [keras.layers.LayerNormalization(), keras.layers.Dense(x_shape[-1])]
         # Call the layer with placeholder inputs to build it
-        self.call(inputs=[keras.Input(shape=x_shape), None, keras.Input(shape=(x_shape[0], 1))])
+        self.call(
+            inputs=[keras.Input(shape=x_shape[1:]), keras.Input(shape=(1,)), keras.Input(shape=(1,))]
+        )
 
     def call(self, inputs, training: bool = False):
-        x, _, conditioning = inputs
-        scale, shift = self._get_film_from_conditioning(conditioning)
+        x, x_labels, timestep_cond = inputs
+        scale, shift = self._get_film_from_conditioning(x_labels, timestep_cond)
         for layer in self._input_layers:
             x = layer(x, training=training)
         for layer in self._dense_res_block_layers:
@@ -109,30 +121,45 @@ class DenseDenoiser(keras.Layer):
             x = layer(x, training=training)
         return x
 
-    def _get_film_from_conditioning(self, conditioning):
-        scale_params = []
-        shift_params = []
-        for i in range(conditioning.shape[-1]):
-            output = conditioning[:, i]
-            for layer in self._cond_layers:
+    def _get_film_from_conditioning(self, labels, timestep_cond):
+        # Timestep
+        output = timestep_cond
+        for layer in self._timestep_cond_layers:
+            output = layer(output)
+        timestep_scale, timestep_shift = output
+        # Labels
+        if labels is not None:
+            output = labels
+            for layer in self._labels_cond_layers:
                 output = layer(output)
-            scale, shift = output
-            scale_params.append(scale)
-            shift_params.append(shift)
-        stacked_scale_params = keras.ops.stack(scale_params, axis=0)
-        stacked_shift_params = keras.ops.stack(shift_params, axis=0)
+            labels_scale, labels_shift = output
+        # Merge
         match self.conditioning_merge_mode:
             case "sum":
-                return keras.ops.sum(stacked_scale_params, axis=0), keras.ops.sum(stacked_shift_params, axis=0)
+                if labels is None:
+                    labels_scale, labels_shift = (keras.ops.zeros_like(timestep_scale),
+                                                  keras.ops.zeros_like(timestep_shift))
+                return (keras.ops.add(timestep_scale, labels_scale),
+                        keras.ops.add(timestep_shift, labels_shift))
             case "prod":
-                return keras.ops.sum(stacked_scale_params, axis=0), keras.ops.sum(stacked_shift_params, axis=0)
+                if labels is None:
+                    labels_scale, labels_shift = (keras.ops.ones_like(timestep_scale),
+                                                  keras.ops.ones_like(timestep_shift))
+                return (keras.ops.multiply(timestep_scale, labels_scale),
+                        keras.ops.multiply(timestep_shift, labels_shift))
             case _:
-                return keras.ops.concatenate(scale_params, axis=-1), keras.ops.concatenate(shift_params, axis=-1)
+                if labels is None:
+                    # TODO - What is the neutral element for concatenation?
+                    labels_scale, labels_shift = (keras.ops.zeros_like(timestep_scale),
+                                                  keras.ops.zeros_like(timestep_shift))
+                return (keras.ops.concatenate([timestep_scale, labels_scale], axis=-1),
+                        keras.ops.concatenate([timestep_shift, labels_shift], axis=-1))
 
     def get_config(self):
         base_config = super().get_config()
         config = {
-            "positional_encoding_layer": keras.saving.serialize_keras_object(self.positional_encoding_layer),
+            "timestep_encoding_layer": keras.saving.serialize_keras_object(self.timestep_encoding_layer),
+            "labels_encoding_layer": keras.saving.serialize_keras_object(self.labels_encoding_layer),
             "units": self.units,
             "num_layers": self.num_layers,
             "conditioning_merge_mode": self.conditioning_merge_mode
@@ -141,8 +168,10 @@ class DenseDenoiser(keras.Layer):
 
     @classmethod
     def from_config(cls, config, custom_objects=None):
-        positional_encoding_layer = keras.saving.deserialize_keras_object(config.pop("positional_encoding_layer"))
+        timestep_encoding_layer = keras.saving.deserialize_keras_object(config.pop("timestep_encoding_layer"))
+        labels_encoding_layer = keras.saving.deserialize_keras_object(config.pop("labels_encoding_layer"))
         return cls(
-            positional_encoding_layer=positional_encoding_layer,
+            timestep_encoding_layer=timestep_encoding_layer,
+            labels_encoding_layer=labels_encoding_layer,
             **config
         )

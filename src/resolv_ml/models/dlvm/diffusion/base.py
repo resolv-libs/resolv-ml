@@ -67,7 +67,7 @@ class DiffusionModel(keras.Model):
                 cfg_uncond_probability = self._cfg_uncond_probability_scheduler(step=current_step)
                 x_labels = x_labels if keras.random.uniform(shape=()) >= cfg_uncond_probability else None
             x_noisy, noise = self.forward_diffusion(x, x_labels, timestep=timestep)
-            pred_noise = self.predict_noise(x_noisy, x_labels=x_labels, timestep=timestep, training=training)
+            pred_noise = self.predict_noise(x_noisy, x_labels=x_labels, timestep=timestep, training=True)
             diffusion_loss = self._loss_fn(noise, pred_noise)
             self.add_loss(diffusion_loss)
             return noise, pred_noise, timestep, diffusion_loss
@@ -103,12 +103,10 @@ class DiffusionModel(keras.Model):
         return noisy_inputs, noise
 
     def predict_noise(self, x_noisy, timestep: int, x_labels=None, training: bool = False):
-        denoiser_cond = self._get_denoiser_conditioning(
-            x_noisy, timestep=timestep, x_labels=x_labels, training=training
-        )
-        pred_noise = self._denoiser((x_noisy, x_labels, denoiser_cond), training=training)
-        if self._cfg_weight:
-            uncond_pred_noise = self._denoiser((x_noisy, None, denoiser_cond), training=training)
+        denoiser_timestep_cond = self._get_denoiser_timestep_conditioning(x_noisy, timestep=timestep, training=training)
+        pred_noise = self._denoiser((x_noisy, x_labels, denoiser_timestep_cond), training=training)
+        if self._cfg_weight and x_labels is not None and not training:
+            uncond_pred_noise = self._denoiser((x_noisy, None, denoiser_timestep_cond), training=training)
             pred_noise = (1 + self._cfg_weight) * pred_noise - self._cfg_weight * uncond_pred_noise
         return pred_noise
 
@@ -144,24 +142,22 @@ class DiffusionModel(keras.Model):
         super()._symbolic_build(data_batch=data_batch)
         self._call_symbolic_build = False
 
-    def _get_denoiser_conditioning(self, noisy_input, timestep: int, x_labels=None, training: bool = False):
+    def _get_denoiser_timestep_conditioning(self, noisy_input, timestep: int, training: bool = False):
         batch_size = noisy_input.shape[0]
-        denoiser_t_cond = timestep
+        denoiser_timestep_cond = timestep
         if self._noise_level_conditioning:
             sqrt_alpha_cumprod = self._noise_scheduler.get_tensor("sqrt_alpha_cumprod", timestep=timestep)
-            denoiser_t_cond = sqrt_alpha_cumprod
+            denoiser_timestep_cond = sqrt_alpha_cumprod
             if training:
                 prev_timestep = timestep - 1
                 sqrt_alpha_cumprod_prev = self._noise_scheduler.get_tensor("sqrt_alpha_cumprod", timestep=prev_timestep)
-                denoiser_t_cond = keras.random.uniform(
+                denoiser_timestep_cond = keras.random.uniform(
                     shape=(1,), minval=sqrt_alpha_cumprod_prev, maxval=sqrt_alpha_cumprod
                 )
             else:
-                denoiser_t_cond = keras.ops.expand_dims(denoiser_t_cond, axis=-1)
-        denoiser_t_cond = batch_tensor(denoiser_t_cond, batch_size)
-        denoiser_cond = keras.ops.concatenate([denoiser_t_cond, x_labels], axis=-1) if x_labels is not None \
-            else denoiser_t_cond
-        return denoiser_cond
+                denoiser_timestep_cond = keras.ops.expand_dims(denoiser_timestep_cond, axis=-1)
+        denoiser_timestep_cond = batch_tensor(denoiser_timestep_cond, batch_size)
+        return denoiser_timestep_cond
 
     def get_config(self):
         base_config = super().get_config()
