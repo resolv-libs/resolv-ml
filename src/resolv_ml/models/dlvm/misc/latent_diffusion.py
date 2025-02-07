@@ -28,8 +28,10 @@ class LatentDiffusion(keras.Model):
             self._vae.build(input_shape)
         if not self._diffusion.built:
             vae_input_shape, cond_input_shape = input_shape
+            batch_size = vae_input_shape[0]
             vae_latent_space_shape = self._vae.get_latent_space_shape()
-            self._diffusion.build((vae_latent_space_shape, cond_input_shape))
+            diffusion_input_shape = (batch_size,) + vae_latent_space_shape
+            self._diffusion.build((diffusion_input_shape, cond_input_shape))
 
     def call(self, inputs, training: bool = None):
         if training or self._evaluation_mode:

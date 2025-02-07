@@ -98,13 +98,16 @@ class TestDiffusionTrainer(unittest.TestCase):
             )
 
     def test_model_inference(self):
-        loaded_model = keras.saving.load_model(self.output_dir / "runs/checkpoints/epoch_01-val_loss_10.45.keras",
+        loaded_model = keras.saving.load_model(self.output_dir / "runs/checkpoints/epoch_01-val_loss_9.44.keras",
                                                compile=False)
         loaded_model.compile(run_eagerly=True)
         logging.info("Testing model inference...")
         num_sequences, sequence_length = (32, 64)
+        decoder_inputs = keras.ops.full((num_sequences,), 64, dtype="int32")
         predicted_sequences, predicted_noise, z = loaded_model.predict(
-            x=keras.ops.convert_to_tensor((num_sequences, sequence_length))
+            x=keras.ops.convert_to_tensor(
+                (keras.ops.full((num_sequences,), num_sequences, dtype="int32"), decoder_inputs)
+            )
         )
         self.assertTrue(predicted_sequences.shape == (32, 64))
 
