@@ -25,11 +25,11 @@ class SequenceEncoder(keras.Model):
                 self._embedding_layer.build(input_shape)
 
     def call(self, inputs, training: bool = False, **kwargs):
-        embedded_seq = inputs
+        embedded_seq, _ = inputs
         if self._embedding_layer:
             if isinstance(self._embedding_layer, keras.layers.Embedding):
-                inputs = keras.ops.squeeze(inputs, axis=-1)
-            embedded_seq = self._embedding_layer(inputs)
+                embedded_seq = keras.ops.squeeze(embedded_seq, axis=-1)
+            embedded_seq = self._embedding_layer(embedded_seq)
         return self.encode(embedded_seq, training, **kwargs)
 
     def get_config(self):

@@ -99,7 +99,7 @@ class VAE(keras.Model):
 
     def encode(self, inputs, training: bool = False, evaluate: bool = False):
         vae_input, aux_input = inputs
-        input_features = self._input_processing_layer(vae_input, training=training)
+        input_features = self._input_processing_layer((vae_input, aux_input), training=training)
         distributions = self._inference_layer((input_features, aux_input), training=training)
         z = self._sampling_layer((vae_input, aux_input, input_features),
                                  prior=distributions[1],
@@ -174,7 +174,7 @@ class VAE(keras.Model):
     def build_graph(self, input_shape):
         seq_input_shape, aux_input_shape = input_shape
         vae_input = keras.Input(shape=seq_input_shape[1:], batch_size=seq_input_shape[0], name="vae_input")
-        vae_aux_input = keras.Input(shape=aux_input_shape[1:], batch_size=aux_input_shape[0], name="vae_aux_input")
+        vae_aux_input = keras.Input(shape=(None,), batch_size=aux_input_shape[0], name="vae_aux_input")
         _, z, _, _ = self.encode((vae_input, vae_aux_input), evaluate=True)
         dec_outputs = self.decode((vae_input, vae_aux_input, z), evaluate=True)
         return keras.Model(inputs=(vae_input, vae_aux_input), outputs=dec_outputs)
